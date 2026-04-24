@@ -26,7 +26,6 @@ def default_quick_validate():
         return Path(env_value)
 
     candidates = [
-        Path(r"C:\Users\wang\.codex\skills\.system\skill-creator\scripts\quick_validate.py"),
         Path.home() / ".codex" / "skills" / ".system" / "skill-creator" / "scripts" / "quick_validate.py",
         Path.home() / ".codex" / "skills" / "skill-creator" / "scripts" / "quick_validate.py"
     ]

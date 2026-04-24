@@ -206,7 +206,8 @@ node --check scripts/scaffold-paper-skill.js
 Validate the parent skill with the official skill validator when available:
 
 ```powershell
-python C:\Users\wang\.codex\skills\.system\skill-creator\scripts\quick_validate.py .
+$env:SKILL_CREATOR_QUICK_VALIDATE = "$HOME\.codex\skills\.system\skill-creator\scripts\quick_validate.py"
+python $env:SKILL_CREATOR_QUICK_VALIDATE .
 ```
 
 ## Included Example

@@ -136,7 +136,10 @@ function inferKeywords(text) {
     { label: "single-cell", patterns: [/single-cell/gi, /single cell/gi] },
     { label: "scRNA-seq", patterns: [/\bscrna\b/gi, /scRNA-seq/gi, /single-cell RNA/gi] },
     { label: "virtual knockout", patterns: [/virtual knockout/gi, /in-silico knockout/gi] },
+    { label: "TF perturbation", patterns: [/TF perturbation/gi, /transcription factor perturbation/gi, /in silico gene perturbation/gi] },
+    { label: "CellOracle", patterns: [/CellOracle/gi] },
     { label: "gene regulatory network", patterns: [/gene regulatory network/gi, /\bscGRN\b/gi] },
+    { label: "transition vector", patterns: [/transition vector/gi] },
     { label: "differential regulation", patterns: [/differential regulation/gi, /differentially regulated/gi] },
     { label: "tensor decomposition", patterns: [/tensor decomposition/gi] },
     { label: "manifold alignment", patterns: [/manifold alignment/gi] },
@@ -154,7 +157,7 @@ function inferHints(text) {
   const keywords = inferKeywords(text);
   return {
     modalityHints: keywords.filter((item) => ["single-cell", "scRNA-seq", "bulk RNA-seq", "spatial transcriptomics"].includes(item)),
-    analysisHints: keywords.filter((item) => ["virtual knockout", "differential regulation", "tensor decomposition", "manifold alignment"].includes(item)),
+    analysisHints: keywords.filter((item) => ["virtual knockout", "TF perturbation", "differential regulation", "tensor decomposition", "manifold alignment", "transition vector"].includes(item)),
     keywords
   };
 }

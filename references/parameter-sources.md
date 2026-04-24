@@ -1,4 +1,4 @@
-# Parameter Sources / 参数来源规范
+﻿# Parameter Sources
 
 Use this file when encoding parameter decisions.
 

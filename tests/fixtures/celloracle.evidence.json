@@ -1,0 +1,95 @@
+{
+  "generatedAt": "2026-04-24T00:00:00.000Z",
+  "repo": {
+    "owner": "morris-lab",
+    "repo": "CellOracle",
+    "githubUrl": "https://github.com/morris-lab/CellOracle",
+    "defaultBranch": "master",
+    "description": "CellOracle is a Python package for gene regulatory network inference and in silico transcription factor perturbation using single-cell RNA-seq and optional scATAC-seq evidence.",
+    "homepage": "https://morris-lab.github.io/CellOracle.documentation/"
+  },
+  "counts": {
+    "totalFiles": 300,
+    "readmeFiles": 1,
+    "dependencyFiles": 2,
+    "entrypointFiles": 5,
+    "exampleFiles": 4
+  },
+  "selections": {
+    "readme": [
+      {
+        "path": "README.md",
+        "size": 5000,
+        "preview": "CellOracle dissects cell identity by inferring cell-type-specific gene regulatory networks from scRNA-seq, integrating motif or scATAC-seq base GRN information, and running in silico transcription factor perturbation to estimate transition vectors.",
+        "githubUrl": "https://github.com/morris-lab/CellOracle/blob/master/README.md"
+      }
+    ],
+    "dependencies": [
+      {
+        "path": "setup.py",
+        "size": 1600,
+        "preview": "setup(name='celloracle', install_requires=['numpy', 'pandas', 'scanpy', 'anndata'])",
+        "githubUrl": "https://github.com/morris-lab/CellOracle/blob/master/setup.py"
+      },
+      {
+        "path": "requirements.txt",
+        "size": 900,
+        "preview": "scanpy\nanndata\npandas\nnumpy\nscikit-learn",
+        "githubUrl": "https://github.com/morris-lab/CellOracle/blob/master/requirements.txt"
+      }
+    ],
+    "entrypoints": [
+      {
+        "path": "celloracle/trajectory/oracle_core.py",
+        "size": 6000,
+        "preview": "class Oracle: build GRN models, simulate_shift, calculate_transition_probability and estimate perturbation vectors.",
+        "githubUrl": "https://github.com/morris-lab/CellOracle/blob/master/celloracle/trajectory/oracle_core.py"
+      },
+      {
+        "path": "celloracle/network_analysis/network_construction.py",
+        "size": 4200,
+        "preview": "Build base GRN and cell-state-specific gene regulatory network models from scRNA-seq and motif information.",
+        "githubUrl": "https://github.com/morris-lab/CellOracle/blob/master/celloracle/network_analysis/network_construction.py"
+      },
+      {
+        "path": "celloracle/applications/gradient_calculation.py",
+        "size": 2400,
+        "preview": "Calculate perturbation and transition vectors for simulated TF knockout.",
+        "githubUrl": "https://github.com/morris-lab/CellOracle/blob/master/celloracle/applications/gradient_calculation.py"
+      }
+    ],
+    "examples": [
+      {
+        "path": "docs/notebooks/01_GRN_modeling.ipynb",
+        "size": 12000,
+        "preview": "Tutorial notebook: prepare AnnData, load base GRN, build Oracle object, perform KNN imputation, infer GRN.",
+        "githubUrl": "https://github.com/morris-lab/CellOracle/blob/master/docs/notebooks/01_GRN_modeling.ipynb"
+      },
+      {
+        "path": "docs/notebooks/02_TF_perturbation.ipynb",
+        "size": 16000,
+        "preview": "Tutorial notebook: run in silico TF perturbation, calculate transition vectors, and visualize perturbation results.",
+        "githubUrl": "https://github.com/morris-lab/CellOracle/blob/master/docs/notebooks/02_TF_perturbation.ipynb"
+      }
+    ]
+  },
+  "pathIndex": {
+    "dependencyFiles": [
+      "setup.py",
+      "requirements.txt"
+    ],
+    "entrypointFiles": [
+      "celloracle/trajectory/oracle_core.py",
+      "celloracle/network_analysis/network_construction.py",
+      "celloracle/applications/gradient_calculation.py"
+    ],
+    "exampleFiles": [
+      "docs/notebooks/01_GRN_modeling.ipynb",
+      "docs/notebooks/02_TF_perturbation.ipynb"
+    ]
+  },
+  "notes": [
+    "Treat README as navigation evidence.",
+    "Prefer package source and official tutorial notebooks for operational workflow evidence."
+  ]
+}

@@ -58,8 +58,8 @@ function ensureArray(value) {
   return Array.isArray(value) ? value : [];
 }
 
-function pair(zh, en) {
-  return { zh, en };
+function pair(_zh, en) {
+  return { zh: en, en };
 }
 
 function getBasename(filePath) {
@@ -82,7 +82,11 @@ function collectTextCorpus(evidence) {
     joinPreviews(sections.readme),
     joinPreviews(sections.dependencies),
     joinPreviews(sections.entrypoints),
-    joinPreviews(sections.examples)
+    joinPreviews(sections.examples),
+    joinPreviews(sections.notebooks),
+    joinPreviews(sections.docs),
+    ...(evidence.installHints || []),
+    ...(evidence.cliHints || [])
   ].filter(Boolean).join("\n\n");
 }
 
@@ -108,7 +112,9 @@ function allEntryPaths(evidence) {
     ...ensureArray(sections.readme).map((entry) => entry.path),
     ...ensureArray(sections.dependencies).map((entry) => entry.path),
     ...ensureArray(sections.entrypoints).map((entry) => entry.path),
-    ...ensureArray(sections.examples).map((entry) => entry.path)
+    ...ensureArray(sections.examples).map((entry) => entry.path),
+    ...ensureArray(sections.notebooks).map((entry) => entry.path),
+    ...ensureArray(sections.docs).map((entry) => entry.path)
   ]);
 }
 
@@ -117,6 +123,223 @@ function regexCount(text, expressions) {
     const matched = text.match(expression);
     return count + (matched ? matched.length : 0);
   }, 0);
+}
+
+function workflowMiningPriority() {
+  return [
+    "running_example_notebook_demo_script",
+    "official_docs_tutorial",
+    "source_code_api",
+    "readme",
+    "paper_methods",
+    "paper_abstract"
+  ];
+}
+
+function dagInferencePriority() {
+  return [
+    "notebook_script_execution_order",
+    "variable_flow",
+    "file_flow",
+    "function_call_graph",
+    "semantic_dependency",
+    "manual_fallback_rule"
+  ];
+}
+
+function stableSlug(value, fallback = "item") {
+  const slug = String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 72);
+  return slug || fallback;
+}
+
+function stableEvidenceId(claim, source = "") {
+  return `ev_${stableSlug(claim)}_${stableSlug(source, "source")}`.slice(0, 96);
+}
+
+function inferEvidenceSourceType(source, category) {
+  const value = `${source || ""} ${category || ""}`.toLowerCase();
+  if (value.includes("paper")) {
+    return "paper";
+  }
+  if (value.includes("notebook") || value.endsWith(".ipynb")) {
+    return "notebook";
+  }
+  if (value.includes("example") || value.includes("demo") || value.includes("manuscript")) {
+    return "example";
+  }
+  if (value.includes("readme")) {
+    return "readme";
+  }
+  if (value.includes("doc") || value.includes("tutorial") || value.includes("vignette")) {
+    return "docs";
+  }
+  if (value.includes("function_signature")) {
+    return "function_signature";
+  }
+  if (value.includes("manual_fallback")) {
+    return "manual_fallback";
+  }
+  return "source_code";
+}
+
+function rankedPriority(labels, priorityOrder, fallback = "manual_fallback_rule") {
+  const available = new Set(ensureArray(labels).filter(Boolean));
+  return ensureArray(priorityOrder).find((item) => available.has(item)) || fallback;
+}
+
+function evidenceTraceItems(items, priorityMapper = evidencePriorityLabel, claimType = "source") {
+  return dedupe(ensureArray(items).filter(Boolean).map((item) => (
+    item && typeof item === "object" ? JSON.stringify(item) : String(item)
+  ))).map((serialized, index) => {
+    let raw = serialized;
+    if (serialized.startsWith("{")) {
+      try {
+        raw = JSON.parse(serialized);
+      } catch (error) {
+        raw = serialized;
+      }
+    }
+    const source = raw && typeof raw === "object"
+      ? raw.source || raw.path || raw.url || JSON.stringify(raw)
+      : raw;
+    const category = raw && typeof raw === "object"
+      ? raw.category || raw.priority_class || priorityMapper(source)
+      : priorityMapper(source);
+    return {
+      evidence_id: raw && typeof raw === "object" && raw.evidence_id
+        ? raw.evidence_id
+        : stableEvidenceId(`${claimType}.${index}`, source),
+      source,
+      path: raw && typeof raw === "object" ? raw.path : undefined,
+      url: raw && typeof raw === "object" ? raw.url : undefined,
+      source_type: raw && typeof raw === "object" && raw.source_type
+        ? raw.source_type
+        : inferEvidenceSourceType(source, category),
+      category,
+      priority_class: category,
+      claim_type: claimType,
+      location: raw && typeof raw === "object" ? raw.location : undefined,
+      snippet: raw && typeof raw === "object" ? raw.snippet : undefined
+    };
+  });
+}
+
+function bestEvidencePriority(items, priorityOrder = workflowMiningPriority()) {
+  return rankedPriority(evidenceTraceItems(items).map((item) => item.category), priorityOrder);
+}
+
+function makeWorkflowStep({ id, title, description, layer = "core", evidence = [], input = [], output = [] }) {
+  const evidenceSources = evidenceTraceItems(evidence);
+  return {
+    id,
+    name: id,
+    titleZh: title,
+    titleEn: title,
+    detailsZh: description,
+    detailsEn: description,
+    script: `scripts/${id}.py`,
+    input,
+    output,
+    parameters: [],
+    layer,
+    evidence,
+    evidence_sources: evidenceSources,
+    evidence_priority_class: rankedPriority(
+      evidenceSources.map((item) => item.category),
+      workflowMiningPriority()
+    ),
+    confidence: evidence.length > 0 ? 0.85 : 0.6
+  };
+}
+
+function evidencePaths(entries, limit = 8) {
+  return ensureArray(entries).slice(0, limit).map((entry) => entry.path);
+}
+
+function workflowEvidenceBuckets(evidence) {
+  const sections = evidence.selections || {};
+  const examples = evidencePaths(sections.examples);
+  const notebooks = evidencePaths(sections.notebooks);
+  const docs = evidencePaths(sections.docs);
+  const docsTutorial = docs.filter((item) => /doc|tutorial|vignette/i.test(item));
+  const source = evidencePaths(sections.entrypoints);
+  const readme = evidencePaths(sections.readme, 2);
+
+  return {
+    running_examples: dedupe([
+      ...examples.filter((item) => /example|demo|manuscript|script|run|notebook/i.test(item)),
+      ...notebooks
+    ]),
+    official_docs: dedupe(docsTutorial.length > 0 ? docsTutorial : docs),
+    source_api: source,
+    readme,
+    paper_methods: [],
+    paper_abstract: []
+  };
+}
+
+function exampleFirstEvidence(evidence, limit = 4) {
+  const buckets = workflowEvidenceBuckets(evidence);
+  return dedupe([
+    ...buckets.running_examples,
+    ...buckets.official_docs,
+    ...buckets.source_api,
+    ...buckets.readme,
+    ...buckets.paper_methods,
+    ...buckets.paper_abstract
+  ]).slice(0, limit);
+}
+
+function evidencePriorityLabel(filePath) {
+  if (!filePath) {
+    return "manual_fallback_rule";
+  }
+  if (/\.ipynb$|example|examples|demo|demos|manuscript/i.test(filePath)) {
+    return "running_example_notebook_demo_script";
+  }
+  if (/doc|docs|tutorial|tutorials|vignette|vignettes/i.test(filePath)) {
+    return "official_docs_tutorial";
+  }
+  if (/README/i.test(filePath)) {
+    return "readme";
+  }
+  return "source_code_api";
+}
+
+function sectionPriorityLabel(sectionName, entry) {
+  const text = `${entry?.path || ""}\n${entry?.preview || ""}`;
+  if (/(\bfunction\s*\(|<-\s*function\b|def\s+\w+\s*\()/i.test(text)) {
+    return "function_signature";
+  }
+  if (sectionName === "examples" || sectionName === "notebooks") {
+    return "running_example_notebook_demo_script";
+  }
+  if (sectionName === "docs") {
+    return "official_docs_tutorial";
+  }
+  if (sectionName === "entrypoints" || sectionName === "dependencies") {
+    return "source_code_api";
+  }
+  if (sectionName === "readme") {
+    return "readme";
+  }
+  return evidencePriorityLabel(entry?.path);
+}
+
+function parameterEvidencePriority() {
+  return [
+    "running_example_notebook_demo_script",
+    "function_signature",
+    "official_docs_tutorial",
+    "source_code_api",
+    "readme",
+    "paper_methods",
+    "paper_abstract"
+  ];
 }
 
 function inferDomain(text, override) {
@@ -171,6 +394,9 @@ function inferAnalysisType(text, override) {
     return override;
   }
 
+  if (/CellOracle|TF perturbation|transcription factor perturbation|cell identity transition|transition vector|in silico gene perturbation/gi.test(text)) {
+    return "tf-perturbation";
+  }
   if (/virtual knockout|in-silico knockout|knocks out a target gene|gene perturbation/gi.test(text)) {
     return "virtual-knockout";
   }
@@ -335,6 +561,9 @@ function inferDependencies(runtime, primaryTool, text) {
 function inferTriggerKeywords(primaryTool, domain, analysisType, text) {
   const keywords = [primaryTool];
 
+  if (analysisType === "tf-perturbation") {
+    keywords.push("TF perturbation", "GRN inference", "cell identity transition");
+  }
   if (analysisType === "virtual-knockout") {
     keywords.push("virtual knockout", "in-silico knockout");
   }
@@ -370,6 +599,17 @@ function inferParamHints(domain, analysisType) {
     };
   }
 
+  if (analysisType === "tf-perturbation") {
+    hints.perturbation_targets = {
+      required: true,
+      tip: "Transcription-factor symbols to perturb."
+    };
+    hints.base_grn_source = {
+      required: false,
+      tip: "Use provided base GRN, infer from scATAC peaks, or choose a species-specific default."
+    };
+  }
+
   if (analysisType === "differential-expression") {
     hints.design = {
       required: true,
@@ -387,37 +627,289 @@ function inferParamHints(domain, analysisType) {
 function inferDomainLabels(domain) {
   switch (domain) {
     case "single-cell":
-      return pair("单细胞组学", "single-cell omics");
+      return pair("single-cell omics", "single-cell omics");
     case "bulk-rna":
-      return pair("整体转录组", "bulk transcriptomics");
+      return pair("bulk transcriptomics", "bulk transcriptomics");
     case "spatial":
-      return pair("空间转录组", "spatial transcriptomics");
+      return pair("spatial transcriptomics", "spatial transcriptomics");
     case "atac-chip":
-      return pair("表观组学", "epigenomics");
+      return pair("epigenomics", "epigenomics");
     case "proteomics":
-      return pair("蛋白质组学", "proteomics");
+      return pair("proteomics", "proteomics");
     case "multi-omics":
-      return pair("多组学", "multi-omics");
+      return pair("multi-omics", "multi-omics");
     default:
-      return pair("组学分析", "omics analysis");
+      return pair("omics analysis", "omics analysis");
   }
 }
 
 function inferAnalysisLabels(analysisType) {
   switch (analysisType) {
+    case "tf-perturbation":
+      return pair("in silico TF perturbation", "in silico TF perturbation");
     case "virtual-knockout":
-      return pair("虚拟敲除", "virtual knockout");
+      return pair("virtual knockout", "virtual knockout");
     case "differential-expression":
-      return pair("差异表达", "differential expression");
+      return pair("differential expression", "differential expression");
     case "gene-regulatory-network":
-      return pair("基因调控网络分析", "gene regulatory network analysis");
+      return pair("gene regulatory network analysis", "gene regulatory network analysis");
     case "peak-calling":
-      return pair("峰调用", "peak calling");
+      return pair("peak calling", "peak calling");
     case "integration":
-      return pair("整合分析", "integration analysis");
+      return pair("integration analysis", "integration analysis");
     default:
-      return pair("方法执行", "method execution");
+      return pair("method execution", "method execution");
   }
+}
+
+function inferPrimaryModality(domain) {
+  switch (domain) {
+    case "single-cell":
+      return "single_cell_transcriptomics";
+    case "spatial":
+      return "spatial_transcriptomics";
+    case "bulk-rna":
+      return "bulk_rnaseq";
+    case "atac-chip":
+      return "single_cell_epigenomics";
+    case "proteomics":
+      return "proteomics";
+    case "multi-omics":
+      return "multiomics";
+    default:
+      return "omics";
+  }
+}
+
+function inferSecondaryModalities(domain, analysisType, text) {
+  const modalities = [];
+  if (analysisType === "tf-perturbation" && /scATAC|ATAC|peak|motif|base[_ -]?GRN/gi.test(text)) {
+    modalities.push("single_cell_epigenomics");
+  }
+  if (analysisType === "tf-perturbation" && /multi-omics|multiomics|scATAC|ATAC|motif/gi.test(text)) {
+    modalities.push("multiomics");
+  }
+  if (domain === "multi-omics") {
+    modalities.push("single_cell_transcriptomics");
+  }
+  return dedupe(modalities).filter((item) => item !== inferPrimaryModality(domain));
+}
+
+function inferTaskFamily(analysisType) {
+  if (analysisType === "tf-perturbation" || analysisType === "virtual-knockout" || analysisType === "gene-regulatory-network") {
+    return ["regulatory_network", "perturbation"];
+  }
+  if (analysisType === "differential-expression") {
+    return ["differential_expression"];
+  }
+  if (analysisType === "integration") {
+    return ["integration"];
+  }
+  return ["omics_analysis"];
+}
+
+function inferPrimaryTask(analysisType) {
+  switch (analysisType) {
+    case "tf-perturbation":
+    case "virtual-knockout":
+      return "perturbation_analysis";
+    case "gene-regulatory-network":
+      return "GRN_inference";
+    case "differential-expression":
+      return "differential_expression";
+    default:
+      return analysisType.replace(/-/g, "_");
+  }
+}
+
+function inferSecondaryTasks(analysisType) {
+  if (analysisType === "tf-perturbation") {
+    return ["in_silico_TF_perturbation", "cell_identity_transition", "GRN_inference"];
+  }
+  if (analysisType === "virtual-knockout") {
+    return ["virtual_gene_knockout", "gene_function_prediction", "perturbed_gene_ranking"];
+  }
+  return [];
+}
+
+function inferPerturbationFacets(analysisType, primaryTool, text) {
+  if (analysisType === "tf-perturbation") {
+    return {
+      target_type: {
+        value: "transcription_factor",
+        evidence: ["CellOracle", "TF perturbation", "transcription factor perturbation"].filter((item) => text.includes(item) || item === primaryTool)
+      },
+      action: {
+        value: "in_silico_knockout_or_shift",
+        evidence: ["in silico gene perturbation", "simulate_shift", "perturbation vector"].filter((item) => new RegExp(item, "i").test(text))
+      },
+      modeling_mechanism: {
+        value: "predictive_GRN_model",
+        evidence: ["gene regulatory network", "base GRN", "cell-state-specific GRN"].filter((item) => new RegExp(item, "i").test(text))
+      },
+      output_interpretation: {
+        value: "cell_identity_transition",
+        evidence: ["transition vector", "cell identity transition", "perturbation vector"].filter((item) => new RegExp(item, "i").test(text))
+      }
+    };
+  }
+
+  if (analysisType === "virtual-knockout") {
+    return {
+      target_type: {
+        value: "gene",
+        evidence: ["knockout_gene", "target gene", "gKO"].filter((item) => new RegExp(item, "i").test(text))
+      },
+      action: {
+        value: "virtual_knockout",
+        evidence: ["virtual knockout", "in-silico knockout", "knocks out a target gene"].filter((item) => new RegExp(item, "i").test(text))
+      },
+      modeling_mechanism: {
+        value: "scGRN_edge_removal_and_manifold_alignment",
+        evidence: ["scGRN", "outdegree edges", "manifold alignment", "tensor decomposition"].filter((item) => new RegExp(item, "i").test(text))
+      },
+      output_interpretation: {
+        value: "differential_regulation_and_gene_function_prediction",
+        evidence: ["differential regulation", "gene function", "perturbed gene"].filter((item) => new RegExp(item, "i").test(text))
+      }
+    };
+  }
+
+  return null;
+}
+
+function inferAvailableLanguages(runtime, text) {
+  const languages = [];
+  if (/python|\.py|pyproject|setup.py|requirements/gi.test(text) || runtime === "python") {
+    languages.push("python");
+  }
+  if (/\bR\b|Rscript|DESCRIPTION|NAMESPACE|\.R\b|library\(/g.test(text) || runtime === "r") {
+    languages.push("r");
+  }
+  if (/matlab|\.m\b/gi.test(text)) {
+    languages.push("matlab");
+  }
+  if (languages.length === 0) {
+    languages.push(runtime);
+  }
+  return dedupe(languages);
+}
+
+function inferExecutionModes(runtime, text) {
+  const modes = [];
+  if (runtime === "python" || /python_api|import\s+[A-Za-z0-9_]+|setup.py|pyproject/gi.test(text)) {
+    modes.push("python_api");
+  }
+  if (runtime === "r" || /Rscript|library\(|DESCRIPTION|NAMESPACE/gi.test(text)) {
+    modes.push("r_api");
+  }
+  if (/\.ipynb|notebook|jupyter/gi.test(text)) {
+    modes.push("notebook");
+  }
+  if (/command line|--help|usage:|cli|console_scripts/gi.test(text)) {
+    modes.push("cli");
+  }
+  if (modes.length === 0) {
+    modes.push("wrapper_only");
+  }
+  return dedupe(modes);
+}
+
+function inferWorkflowEngines(text) {
+  const engines = [];
+  if (/Snakefile|snakemake/gi.test(text)) {
+    engines.push("snakemake");
+  }
+  if (/nextflow\.config|nextflow/gi.test(text)) {
+    engines.push("nextflow");
+  }
+  if (/\bCWL\b|\.cwl\b|Common Workflow Language/gi.test(text)) {
+    engines.push("cwl");
+  }
+  return engines;
+}
+
+function inferPreferredLanguage(runtime, text, override) {
+  if (override) {
+    return override;
+  }
+  if (/python|\.py|pyproject|setup.py|requirements/gi.test(text)) {
+    return "python";
+  }
+  if (runtime === "r") {
+    return "r";
+  }
+  return runtime;
+}
+
+function inferPackageType(runtime, availableLanguages) {
+  if (availableLanguages.includes("python") && availableLanguages.includes("r")) {
+    return "multi_language_package";
+  }
+  if (runtime === "r" || availableLanguages.includes("r")) {
+    return "r_package";
+  }
+  if (runtime === "python" || availableLanguages.includes("python")) {
+    return "python_package";
+  }
+  return "repository_workflow";
+}
+
+function inferRequiredInputs(analysisType) {
+  if (analysisType === "tf-perturbation") {
+    return ["scRNA_seq_object", "cell_annotation", "perturbation_tf_list"];
+  }
+  if (analysisType === "virtual-knockout") {
+    return ["wt_expression_matrix", "knockout_gene"];
+  }
+  return ["primary_input"];
+}
+
+function inferOptionalInputs(analysisType) {
+  if (analysisType === "tf-perturbation") {
+    return ["base_grn", "scATAC_peaks", "pseudotime"];
+  }
+  if (analysisType === "virtual-knockout") {
+    return ["cell_metadata", "gene_filtering_params", "enrichment_database"];
+  }
+  return ["metadata"];
+}
+
+function inferAlgorithmClassification(domain, analysisType, runtime, primaryTool, githubUrl, text, preferredLanguageOverride) {
+  const availableLanguages = inferAvailableLanguages(runtime, text);
+  const preferredLanguage = inferPreferredLanguage(runtime, text, preferredLanguageOverride);
+  const executionModes = inferExecutionModes(runtime, text);
+  const workflowEngines = inferWorkflowEngines(text);
+  return {
+    algorithm: {
+      name: primaryTool,
+      repository: githubUrl
+    },
+    classification: {
+      primary_modality: inferPrimaryModality(domain),
+      secondary_modalities: inferSecondaryModalities(domain, analysisType, text),
+      task_family: inferTaskFamily(analysisType),
+      primary_task: inferPrimaryTask(analysisType),
+      secondary_tasks: inferSecondaryTasks(analysisType),
+      perturbation: inferPerturbationFacets(analysisType, primaryTool, text),
+      confidence: 0.85,
+      evidence: ["paper_evidence", "repository_evidence"]
+    },
+    implementation: {
+      languages: availableLanguages,
+      main_language: runtime === "r" ? "r" : runtime,
+      available_languages: availableLanguages,
+      preferred_language: preferredLanguage,
+      fallback_language: preferredLanguage === "python" && availableLanguages.includes("r") ? "r" : null,
+      package_type: inferPackageType(runtime, availableLanguages),
+      execution_modes: executionModes,
+      workflow_engines: workflowEngines,
+      confidence: 0.8,
+      evidence: ["dependency_files", "entrypoints", "readme"]
+    },
+    required_inputs: inferRequiredInputs(analysisType),
+    optional_inputs: inferOptionalInputs(analysisType)
+  };
 }
 
 function inferRouting(primaryTool, domain, analysisType, hasExamples) {
@@ -426,85 +918,127 @@ function inferRouting(primaryTool, domain, analysisType, hasExamples) {
 
   if (domain === "single-cell" && analysisType === "virtual-knockout") {
     return {
-      why_this_exists: pair(
-        `这个 skill 把 ${primaryTool} 的论文和官方仓库整理成可路由、可校验、可报告的执行合同，用于在 WT 单细胞表达矩阵上执行虚拟敲除分析。`,
-        `This skill turns ${primaryTool} into a routable, validated, and report-producing execution contract for virtual knockout on WT single-cell expression matrices.`
-      ),
+      why_this_exists: pair(`This skill turns ${primaryTool} into a routable, validated, and report-producing execution contract for virtual knockout on WT single-cell expression matrices.`, `This skill turns ${primaryTool} into a routable, validated, and report-producing execution contract for virtual knockout on WT single-cell expression matrices.`),
       when_to_use: [
-        pair(
-          "当任务是从 WT scRNA-seq 矩阵出发，对候选基因执行虚拟敲除并输出扰动或差异调控结果时使用。",
-          "Use when the task starts from a WT scRNA-seq matrix and needs virtual knockout plus perturbation or differential-regulation outputs."
-        ),
+        pair("Use when the task starts from a WT scRNA-seq matrix and needs virtual knockout plus perturbation or differential-regulation outputs.", "Use when the task starts from a WT scRNA-seq matrix and needs virtual knockout plus perturbation or differential-regulation outputs."),
         pair(
           hasExamples
-            ? "当需要区分核心 WT-only 工作流与仓库里的 manuscript 复现实例时使用。"
-            : "当需要把核心方法与包装层执行合同明确分开时使用。",
+            ? "Use when the user needs the core WT-only workflow clearly separated from manuscript-style reproduction branches."
+            : "Use when the user needs the core method separated from the wrapper-level execution contract.",
           hasExamples
             ? "Use when the user needs the core WT-only workflow clearly separated from manuscript-style reproduction branches."
             : "Use when the user needs the core method separated from the wrapper-level execution contract."
         )
       ],
       when_not_to_use: [
-        pair(
-          "不要用于真实 CRISPR KO 实验设计、通用差异表达分析或多样本整合。",
-          "Do not use for real CRISPR KO experimental design, generic differential expression, or multi-sample integration."
-        ),
-        pair(
-          "不要在没有 WT 输入矩阵的情况下使用。",
-          "Do not use when no WT input matrix is available."
-        )
+        pair("Do not use for real CRISPR KO experimental design, generic differential expression, or multi-sample integration.", "Do not use for real CRISPR KO experimental design, generic differential expression, or multi-sample integration."),
+        pair("Do not use when no WT input matrix is available.", "Do not use when no WT input matrix is available.")
       ],
       route_elsewhere: [
-        pair(
-          "如果任务还是 FASTQ 到表达矩阵的上游处理，路由到比对或定量 skill。",
-          "If the task is still upstream FASTQ-to-matrix processing, route to an alignment or quantification skill."
-        ),
-        pair(
-          "如果任务是 bulk RNA-seq 差异表达，路由到 bulk differential-expression skill。",
-          "If the task is bulk RNA-seq differential expression, route to a bulk differential-expression skill."
-        )
+        pair("If the task is still upstream FASTQ-to-matrix processing, route to an alignment or quantification skill.", "If the task is still upstream FASTQ-to-matrix processing, route to an alignment or quantification skill."),
+        pair("If the task is bulk RNA-seq differential expression, route to a bulk differential-expression skill.", "If the task is bulk RNA-seq differential expression, route to a bulk differential-expression skill.")
       ]
     };
   }
 
   return {
-    why_this_exists: pair(
-      `这个 skill 把 ${primaryTool} 的 ${domainLabel.zh} ${analysisLabel.zh} 方法整理成可路由、可校验、可报告的执行合同。`,
-      `This skill turns ${primaryTool} into a routable, validated, and report-producing execution contract for ${domainLabel.en} ${analysisLabel.en}.`
-    ),
+    why_this_exists: pair(`This skill turns ${primaryTool} into a routable, validated, and report-producing execution contract for ${domainLabel.en} ${analysisLabel.en}.`, `This skill turns ${primaryTool} into a routable, validated, and report-producing execution contract for ${domainLabel.en} ${analysisLabel.en}.`),
     when_to_use: [
-      pair(
-        `当任务需要基于官方论文与仓库执行 ${analysisLabel.zh}，并且结果必须可追溯、可复现时使用。`,
-        `Use when the task needs ${analysisLabel.en} grounded in the official paper and repository, with traceable and reproducible outputs.`
-      )
+      pair(`Use when the task needs ${analysisLabel.en} grounded in the official paper and repository, with traceable and reproducible outputs.`, `Use when the task needs ${analysisLabel.en} grounded in the official paper and repository, with traceable and reproducible outputs.`)
     ],
     when_not_to_use: [
-      pair(
-        "不要用于与该组学类型不匹配的输入数据。",
-        "Do not use for input data that does not match this omics modality."
-      )
+      pair("Do not use for input data that does not match this omics modality.", "Do not use for input data that does not match this omics modality.")
     ],
     route_elsewhere: [
-      pair(
-        "如果任务仍处于上游原始测序数据处理阶段，路由到更上游的预处理或定量 skill。",
-        "If the task is still in raw-data preprocessing, route to an upstream preprocessing or quantification skill."
-      )
+      pair("If the task is still in raw-data preprocessing, route to an upstream preprocessing or quantification skill.", "If the task is still in raw-data preprocessing, route to an upstream preprocessing or quantification skill.")
     ]
   };
 }
 
 function inferInputContract(domain, analysisType, geneName) {
+  if (domain === "single-cell" && analysisType === "tf-perturbation") {
+    return {
+      formats: [
+        {
+          name: "input_manifest.json",
+          zh: "JSON manifest declaring the single-cell object, annotation, and TF perturbation targets.",
+          en: "JSON manifest declaring the single-cell object, annotation, and TF perturbation targets."
+        },
+        {
+          name: "h5ad_or_loom",
+          zh: "AnnData or loom-style single-cell expression object.",
+          en: "AnnData or loom-style single-cell expression object."
+        }
+      ],
+      required_manifest_fields: [
+        "inputs.scrna_object.path",
+        "inputs.cell_annotation",
+        "inputs.perturbation_tf_list",
+        "inputs.analysis_mode"
+      ],
+      file_fields: [
+        {
+          path: "inputs.scrna_object.path",
+          required: true,
+          zh: "The scRNA-seq object path must exist.",
+          en: "The scRNA-seq object path must exist."
+        }
+      ],
+      state_requirements: [
+        {
+          path: "inputs.scrna_object.has_gene_names",
+          required: true,
+          equals: true,
+          zh: "Gene names must be available so TF targets can be checked.",
+          en: "Gene names must be available so TF targets can be checked."
+        },
+        {
+          path: "inputs.cell_annotation",
+          required: true,
+          zh: "Cell type or cluster annotation must be present for group-specific GRN inference.",
+          en: "Cell type or cluster annotation must be present for group-specific GRN inference."
+        },
+        {
+          path: "inputs.analysis_mode",
+          required: true,
+          one_of: ["core_tf_perturbation", "paper_reproduction"],
+          zh: "The manifest must distinguish the core TF perturbation workflow from paper reproduction.",
+          en: "The manifest must distinguish the core TF perturbation workflow from paper reproduction."
+        }
+      ],
+      demo_input_manifest: {
+        inputs: {
+          scrna_object: {
+            path: "demo_scrna_summary.json",
+            has_gene_names: true
+          },
+          cell_annotation: "cell_type",
+          perturbation_tf_list: [geneName],
+          analysis_mode: "core_tf_perturbation"
+        }
+      },
+      demo_files: {
+        "demo_scrna_summary.json": JSON.stringify({
+          cells: 12,
+          genes: [geneName, "GENE_B", "GENE_C"],
+          obs_columns: ["cell_type"],
+          obsm_keys: ["X_umap"]
+        }, null, 2) + "\n"
+      }
+    };
+  }
+
   if (domain === "single-cell" && analysisType === "virtual-knockout") {
     return {
       formats: [
         {
           name: "input_manifest.json",
-          zh: "推荐输入是 JSON manifest，用来声明矩阵路径和对象状态。",
+          zh: "The preferred input is a JSON manifest that declares matrix paths and object state.",
           en: "The preferred input is a JSON manifest that declares matrix paths and object state."
         },
         {
           name: "matrix_market_or_csv",
-          zh: "表达矩阵可以是 Matrix Market 或 CSV，但 manifest 必须声明方向和是否为原始计数。",
+          zh: "Expression matrices may be Matrix Market or CSV, but the manifest must state orientation and whether they are raw counts.",
           en: "Expression matrices may be Matrix Market or CSV, but the manifest must state orientation and whether they are raw counts."
         }
       ],
@@ -519,7 +1053,7 @@ function inferInputContract(domain, analysisType, geneName) {
         {
           path: "inputs.wt_matrix.path",
           required: true,
-          zh: "WT 表达矩阵路径必须存在。",
+          zh: "The WT expression matrix path must exist.",
           en: "The WT expression matrix path must exist."
         }
       ],
@@ -528,28 +1062,28 @@ function inferInputContract(domain, analysisType, geneName) {
           path: "inputs.wt_matrix.orientation",
           required: true,
           equals: "genes_by_cells",
-          zh: "WT 矩阵必须是基因在行、细胞在列。",
+          zh: "The WT matrix must be organized as genes in rows and cells in columns.",
           en: "The WT matrix must be organized as genes in rows and cells in columns."
         },
         {
           path: "inputs.wt_matrix.normalization",
           required: true,
           one_of: ["raw_counts", "unnormalized_counts"],
-          zh: "核心输入应为原始或未标准化计数，以免静默跳过方法要求的前置质量控制。",
+          zh: "Core input should remain raw or otherwise unnormalized so method-level preflight assumptions are not silently bypassed.",
           en: "Core input should remain raw or otherwise unnormalized so method-level preflight assumptions are not silently bypassed."
         },
         {
           path: "inputs.wt_matrix.has_gene_names",
           required: true,
           equals: true,
-          zh: "矩阵必须保留基因名，否则无法验证待敲除基因是否存在。",
+          zh: "The matrix must retain gene names so the wrapper can verify that the knockout gene exists.",
           en: "The matrix must retain gene names so the wrapper can verify that the knockout gene exists."
         },
         {
           path: "inputs.analysis_mode",
           required: true,
           one_of: ["core_wt_only", "paper_reproduction"],
-          zh: "必须显式声明是核心 WT-only 路径还是论文复现路径。",
+          zh: "The manifest must explicitly declare whether this is the core WT-only path or the paper-reproduction path.",
           en: "The manifest must explicitly declare whether this is the core WT-only path or the paper-reproduction path."
         }
       ],
@@ -575,7 +1109,7 @@ function inferInputContract(domain, analysisType, geneName) {
     formats: [
       {
         name: "input_manifest.json",
-        zh: "推荐输入是 JSON manifest，用来声明文件路径和对象状态。",
+        zh: "The preferred input is a JSON manifest that declares file paths and object state.",
         en: "The preferred input is a JSON manifest that declares file paths and object state."
       }
     ],
@@ -587,7 +1121,7 @@ function inferInputContract(domain, analysisType, geneName) {
       {
         path: "inputs.primary_input.path",
         required: true,
-        zh: "主输入文件路径必须存在。",
+        zh: "The primary input file path must exist.",
         en: "The primary input file path must exist."
       }
     ],
@@ -596,7 +1130,7 @@ function inferInputContract(domain, analysisType, geneName) {
         path: "inputs.analysis_mode",
         required: true,
         equals: "core",
-        zh: "必须显式声明本次运行的分析模式。",
+        zh: "The analysis mode must be explicitly declared.",
         en: "The analysis mode must be explicitly declared."
       }
     ],
@@ -614,7 +1148,100 @@ function inferInputContract(domain, analysisType, geneName) {
   };
 }
 
-function inferLiteratureDefaults(text, analysisType) {
+function evidenceEntriesBySection(evidence) {
+  const sections = evidence?.selections || {};
+  return [
+    ["examples", sections.examples],
+    ["notebooks", sections.notebooks],
+    ["docs", sections.docs],
+    ["entrypoints", sections.entrypoints],
+    ["dependencies", sections.dependencies],
+    ["readme", sections.readme]
+  ].flatMap(([section, entries]) => ensureArray(entries).map((entry) => ({
+    section,
+    path: entry.path,
+    preview: entry.preview || "",
+    githubUrl: entry.githubUrl || ""
+  })));
+}
+
+function parameterSearchPatterns(parameterName, analysisType, runtime) {
+  const common = {
+    knockout_gene: [/gKO\b/i, /knockout[_\s-]?gene/i, /target gene/i],
+    analysis_mode: [/analysis[_\s-]?mode/i, /paper[_\s-]?reproduction/i, /core[_\s-]?wt/i],
+    r_runtime_available: [/DESCRIPTION/i, /NAMESPACE/i, /Rscript/i],
+    python_runtime_available: [/setup\.py/i, /requirements/i, /python/i],
+    wt_input_normalization: [/normalization/i, /raw counts/i, /countMatrix/i],
+    edge_weight_quantile: [/quantile\(abs\(X\)/i, /qFilter/i],
+    direction_lambda: [/lambda\s*=/i, /strictDirection/i],
+    perturbation_targets: [/perturbation/i, /simulate_shift/i, /transition vector/i, /\bTF\b/i],
+    base_grn_source: [/base GRN/i, /motif/i, /scATAC/i, /network_construction/i],
+    cell_grouping: [/cell annotation/i, /cell[_\s-]?type/i, /cluster/i, /AnnData/i],
+    preferred_language: [runtime === "python" ? /setup\.py|requirements|python/i : /DESCRIPTION|NAMESPACE|R package/i],
+    method_defaults: [/default/i, /README/i]
+  };
+  return common[parameterName] || [new RegExp(parameterName.replace(/_/g, "[-_\\s]?"), "i")];
+}
+
+function parameterEvidenceSources(evidence, item, groupName, analysisType, runtime) {
+  const entries = evidenceEntriesBySection(evidence);
+  const patterns = parameterSearchPatterns(item.name, analysisType, runtime);
+  const matches = entries.filter((entry) => {
+    const text = `${entry.path}\n${entry.preview}`;
+    return patterns.some((pattern) => pattern.test(text));
+  }).slice(0, 4);
+
+  if (matches.length > 0) {
+    return matches.map((entry) => ({
+      source: entry.path,
+      category: sectionPriorityLabel(entry.section, entry),
+      url: entry.githubUrl || undefined
+    }));
+  }
+
+  if (/literature/i.test(groupName)) {
+    return [{
+      source: "paper_methods",
+      category: "paper_methods"
+    }];
+  }
+  if (/wrapper/i.test(groupName)) {
+    return [{
+      source: "paper2omics wrapper contract",
+      category: "manual_fallback_rule"
+    }];
+  }
+  return ensureArray(item.sources).map((source) => ({
+    source,
+    category: "manual_fallback_rule"
+  }));
+}
+
+function annotateParameterEvidence(policy, evidence, analysisType, runtime) {
+  const groups = [
+    ["user_required", "User required"],
+    ["auto_detected", "Auto detected"],
+    ["literature_defaults", "Literature defaults"],
+    ["wrapper_defaults", "Wrapper defaults"]
+  ];
+  for (const [key, groupName] of groups) {
+    policy[key] = ensureArray(policy[key]).map((item) => {
+      const evidenceSources = parameterEvidenceSources(evidence, item, groupName, analysisType, runtime);
+      return {
+        ...item,
+        evidence_sources: evidenceSources,
+        evidence_priority_class: rankedPriority(
+          evidenceSources.map((source) => source.category),
+          parameterEvidencePriority(),
+          /literature/i.test(groupName) ? "paper_methods" : "manual_fallback_rule"
+        )
+      };
+    });
+  }
+  return policy;
+}
+
+function inferLiteratureDefaults(text, analysisType, evidence) {
   const defaults = [];
 
   const quantileMatch = text.match(/quantile\(abs\(X\),\s*([0-9.]+)\)/i);
@@ -622,10 +1249,8 @@ function inferLiteratureDefaults(text, analysisType) {
     defaults.push({
       name: "edge_weight_quantile",
       value: quantileMatch[1],
-      rationale: pair(
-        `源码中用 quantile(abs(X), ${quantileMatch[1]}) 过滤低权重边。`,
-        `The source code uses quantile(abs(X), ${quantileMatch[1]}) to filter low-weight edges.`
-      )
+      sources: ["source_code_api"],
+      rationale: pair(`The source code uses quantile(abs(X), ${quantileMatch[1]}) to filter low-weight edges.`, `The source code uses quantile(abs(X), ${quantileMatch[1]}) to filter low-weight edges.`)
     });
   }
 
@@ -634,10 +1259,8 @@ function inferLiteratureDefaults(text, analysisType) {
     defaults.push({
       name: "direction_lambda",
       value: lambdaMatch[1],
-      rationale: pair(
-        `源码中的方向约束函数默认使用 lambda = ${lambdaMatch[1]}。`,
-        `The directionality helper defaults to lambda = ${lambdaMatch[1]} in the source code.`
-      )
+      sources: ["function_signature"],
+      rationale: pair(`The directionality helper defaults to lambda = ${lambdaMatch[1]} in the source code.`, `The directionality helper defaults to lambda = ${lambdaMatch[1]} in the source code.`)
     });
   }
 
@@ -645,81 +1268,138 @@ function inferLiteratureDefaults(text, analysisType) {
     defaults.push({
       name: "method_defaults",
       value: "see_repository_defaults",
-      rationale: pair(
-        "参数默认值未在当前证据截断片段中完整确认，应以主实现和官方 README 为准。",
-        "Method defaults are not fully confirmed in the truncated evidence and should be checked against the main implementation and official README."
-      )
+      rationale: pair("Method defaults are not fully confirmed in the truncated evidence and should be checked against the main implementation and official README.", "Method defaults are not fully confirmed in the truncated evidence and should be checked against the main implementation and official README.")
     });
   }
 
   return defaults;
 }
 
-function inferParameterPolicy(domain, analysisType, runtime, text) {
-  const literatureDefaults = inferLiteratureDefaults(text, analysisType);
+function inferParameterPolicy(domain, analysisType, runtime, text, evidence = {}) {
+  const literatureDefaults = inferLiteratureDefaults(text, analysisType, evidence);
+
+  if (domain === "single-cell" && analysisType === "tf-perturbation") {
+    return annotateParameterEvidence({
+      evidence_priority: parameterEvidencePriority(),
+      required_user_decisions: [
+        pair("The user must provide or approve the transcription factors to perturb.", "The user must provide or approve the transcription factors to perturb."),
+        pair("The user must identify the cell annotation column or grouping strategy.", "The user must identify the cell annotation column or grouping strategy.")
+      ],
+      user_required: [
+        {
+          name: "perturbation_targets",
+          description: pair("TF symbols to perturb.", "TF symbols to perturb."),
+          sources: [
+            "config.analysis.perturbation_targets",
+            "manifest.inputs.perturbation_tf_list"
+          ],
+          rationale: pair("The perturbation targets determine which simulated TF knockouts are run.", "The perturbation targets determine which simulated TF knockouts are run.")
+        }
+      ],
+      auto_detected: [
+        {
+          name: "base_grn_source",
+          description: pair("Choose provided base GRN, scATAC-derived GRN, or species-specific default.", "Choose provided base GRN, scATAC-derived GRN, or species-specific default."),
+          sources: [
+            "manifest.inputs.base_grn",
+            "manifest.inputs.scATAC_peaks",
+            "config.species"
+          ],
+          fallback_value: "species_default_or_user_required",
+          rationale: pair("CellOracle needs a base GRN before cell-state-specific network modeling.", "CellOracle needs a base GRN before cell-state-specific network modeling.")
+        },
+        {
+          name: "cell_grouping",
+          description: pair("Use explicit cell annotation, existing clusters, or block for preprocessing.", "Use explicit cell annotation, existing clusters, or block for preprocessing."),
+          sources: [
+            "manifest.inputs.cell_annotation",
+            "adata.obs"
+          ],
+          fallback_value: "require_annotation_or_clustering",
+          rationale: pair("Group-specific network inference requires meaningful cell groups.", "Group-specific network inference requires meaningful cell groups.")
+        }
+      ],
+      literature_defaults: literatureDefaults.length > 0 ? literatureDefaults : [
+        {
+          name: "preferred_language",
+          value: "python",
+          rationale: pair("The official CellOracle implementation is Python.", "The official CellOracle implementation is Python.")
+        }
+      ],
+      wrapper_defaults: [
+        {
+          name: "result_bundle_version",
+          value: "1.0",
+          rationale: pair("Use the standard paper2omics result bundle.", "Use the standard paper2omics result bundle.")
+        },
+        {
+          name: "dry_run_mode",
+          value: "true",
+          rationale: pair("Validate contracts and runtime before spending cluster resources.", "Validate contracts and runtime before spending cluster resources.")
+        }
+      ],
+      decision_rules: [
+        {
+          titleZh: "Base GRN source selection",
+          titleEn: "Base GRN source selection",
+          detailsZh: "Use a user-provided base GRN first; otherwise build from scATAC peaks when present; otherwise require a species-specific default or user confirmation.",
+          detailsEn: "Use a user-provided base GRN first; otherwise build from scATAC peaks when present; otherwise require a species-specific default or user confirmation."
+        },
+        {
+          titleZh: "Large dataset runtime control",
+          titleEn: "Large dataset runtime control",
+          detailsZh: "If cell count is high, warn and prefer downsampling or cluster-wise execution for smoke tests.",
+          detailsEn: "If cell count is high, warn and prefer downsampling or cluster-wise execution for smoke tests."
+        }
+      ]
+    }, evidence, analysisType, runtime);
+  }
 
   if (domain === "single-cell" && analysisType === "virtual-knockout") {
-    return {
+    return annotateParameterEvidence({
+      evidence_priority: parameterEvidencePriority(),
       required_user_decisions: [
-        pair(
-          "必须提供待敲除的基因符号，并确认该基因在过滤后仍保留。",
-          "The knockout gene must be provided and confirmed to remain present after filtering."
-        ),
-        pair(
-          "必须确认本次运行是核心 WT-only 分析还是论文复现分支。",
-          "The user must confirm whether the run targets the core WT-only analysis or a paper-reproduction branch."
-        )
+        pair("The knockout gene must be provided and confirmed to remain present after filtering.", "The knockout gene must be provided and confirmed to remain present after filtering."),
+        pair("The user must confirm whether the run targets the core WT-only analysis or a paper-reproduction branch.", "The user must confirm whether the run targets the core WT-only analysis or a paper-reproduction branch.")
       ],
       user_required: [
         {
           name: "knockout_gene",
-          description: pair("目标敲除基因。", "Target knockout gene."),
+          description: pair("Target knockout gene.", "Target knockout gene."),
           sources: [
             "config.analysis.knockout_gene",
             "manifest.inputs.knockout_gene"
           ],
-          rationale: pair(
-            "这决定哪个基因的出边会被置零，不能自动猜测。",
-            "This determines which gene loses its outgoing edges and must not be guessed."
-          )
+          rationale: pair("This determines which gene loses its outgoing edges and must not be guessed.", "This determines which gene loses its outgoing edges and must not be guessed.")
         },
         {
           name: "analysis_mode",
-          description: pair("核心路径还是论文复现分支。", "Core path versus paper-reproduction branch."),
+          description: pair("Core path versus paper-reproduction branch.", "Core path versus paper-reproduction branch."),
           sources: [
             "config.analysis.analysis_mode",
             "manifest.inputs.analysis_mode"
           ],
-          rationale: pair(
-            "它决定是否允许 manuscript 里的真实 WT/KO 对照分支进入执行计划。",
-            "It determines whether real WT/KO manuscript branches may enter the execution plan."
-          )
+          rationale: pair("It determines whether real WT/KO manuscript branches may enter the execution plan.", "It determines whether real WT/KO manuscript branches may enter the execution plan.")
         }
       ],
       auto_detected: [
         {
           name: "r_runtime_available",
-          description: pair("Rscript 是否可用。", "Whether Rscript is available."),
+          description: pair("Whether Rscript is available.", "Whether Rscript is available."),
           sources: [
             "runtime.targets.Rscript.available"
           ],
           fallback_value: false,
-          rationale: pair(
-            "native execution 依赖 Rscript。",
-            "Native execution depends on Rscript."
-          )
+          rationale: pair("Native execution depends on Rscript.", "Native execution depends on Rscript.")
         },
         {
           name: "wt_input_normalization",
-          description: pair("从 manifest 读取 WT 输入矩阵状态。", "Read the WT input matrix state from the manifest."),
+          description: pair("Read the WT input matrix state from the manifest.", "Read the WT input matrix state from the manifest."),
           sources: [
             "manifest.inputs.wt_matrix.normalization"
           ],
           fallback_value: "unknown",
-          rationale: pair(
-            "wrapper 不能静默假设输入已经标准化或未标准化。",
-            "The wrapper must not silently assume whether the input is normalized."
-          )
+          rationale: pair("The wrapper must not silently assume whether the input is normalized.", "The wrapper must not silently assume whether the input is normalized.")
         }
       ],
       literature_defaults: literatureDefaults,
@@ -727,57 +1407,46 @@ function inferParameterPolicy(domain, analysisType, runtime, text) {
         {
           name: "result_bundle_version",
           value: "1.0",
-          rationale: pair(
-            "统一结果目录结构，便于 smoke test、报告重建和复现记录。",
-            "A fixed result bundle keeps smoke tests, report regeneration, and reproducibility records consistent."
-          )
+          rationale: pair("A fixed result bundle keeps smoke tests, report regeneration, and reproducibility records consistent.", "A fixed result bundle keeps smoke tests, report regeneration, and reproducibility records consistent.")
         },
         {
           name: "dry_run_mode",
           value: "true",
-          rationale: pair(
-            "默认先验证合同与运行时，再决定是否真正消耗集群资源。",
-            "Default to validating the contract and runtime before executing the full analysis."
-          )
+          rationale: pair("Default to validating the contract and runtime before executing the full analysis.", "Default to validating the contract and runtime before executing the full analysis.")
         }
       ],
       decision_rules: [
         {
-          titleZh: "优先走核心 WT-only 路径",
+          titleZh: "Prefer the core WT-only path",
           titleEn: "Prefer the core WT-only path",
-          detailsZh: "如果只有 WT 输入，就只生成虚拟敲除核心路径，不把 manuscript 复现脚本并入最小执行合同。",
+          detailsZh: "If only WT input is available, keep the workflow on the virtual-knockout core path and do not merge manuscript reproduction scripts into the minimum contract.",
           detailsEn: "If only WT input is available, keep the workflow on the virtual-knockout core path and do not merge manuscript reproduction scripts into the minimum contract."
         },
         {
-          titleZh: "运行时缺失时阻断 native execution",
+          titleZh: "Block native execution when a required runtime is missing",
           titleEn: "Block native execution when a required runtime is missing",
-          detailsZh: "如果 Rscript 不可用，返回结构化 blocked 状态，而不是假装方法已经执行成功。",
+          detailsZh: "If Rscript is unavailable, emit a structured blocked status instead of pretending the method already ran.",
           detailsEn: "If Rscript is unavailable, emit a structured blocked status instead of pretending the method already ran."
         }
       ]
-    };
+    }, evidence, analysisType, runtime);
   }
 
-  return {
+  return annotateParameterEvidence({
+    evidence_priority: parameterEvidencePriority(),
     required_user_decisions: [
-      pair(
-        "用户必须确认输入对象已经满足方法前提状态。",
-        "The user must confirm that the input object already satisfies method prerequisites."
-      )
+      pair("The user must confirm that the input object already satisfies method prerequisites.", "The user must confirm that the input object already satisfies method prerequisites.")
     ],
     user_required: [],
     auto_detected: [
       {
         name: `${runtime}_runtime_available`,
-        description: pair("检查主要运行时是否可用。", "Check whether the primary runtime is available."),
+        description: pair("Check whether the primary runtime is available.", "Check whether the primary runtime is available."),
         sources: [
           `runtime.targets.${runtime === "r" ? "Rscript" : "python"}.available`
         ],
         fallback_value: false,
-        rationale: pair(
-          "native execution 依赖主要运行时。",
-          "Native execution depends on the primary runtime."
-        )
+        rationale: pair("Native execution depends on the primary runtime.", "Native execution depends on the primary runtime.")
       }
     ],
     literature_defaults: literatureDefaults,
@@ -785,44 +1454,41 @@ function inferParameterPolicy(domain, analysisType, runtime, text) {
       {
         name: "result_bundle_version",
         value: "1.0",
-        rationale: pair(
-          "固定结果目录结构，方便验证和报告。",
-          "A fixed result bundle simplifies validation and reporting."
-        )
+        rationale: pair("A fixed result bundle simplifies validation and reporting.", "A fixed result bundle simplifies validation and reporting.")
       }
     ],
     decision_rules: [
       {
-        titleZh: "证据优先于想当然",
+        titleZh: "Evidence over assumptions",
         titleEn: "Evidence over assumptions",
-        detailsZh: "如果论文和仓库证据不足，就显式标注未确认，而不是静默补全。",
+        detailsZh: "If the paper or repository evidence is incomplete, mark the field as unconfirmed instead of silently filling it in.",
         detailsEn: "If the paper or repository evidence is incomplete, mark the field as unconfirmed instead of silently filling it in."
       }
     ]
-  };
+  }, evidence, analysisType, runtime);
 }
 
 function classifyReferenceNote(item) {
   const base = getBasename(item.path).toLowerCase();
   if (base.includes("readme")) {
-    return pair("仓库总览与输入输出说明。", "Repository overview plus input and output guidance.");
+    return pair("Repository overview plus input and output guidance.", "Repository overview plus input and output guidance.");
   }
   if (base.includes("description") || base.includes("namespace")) {
-    return pair("依赖与导出接口证据。", "Dependency and exported-interface evidence.");
+    return pair("Dependency and exported-interface evidence.", "Dependency and exported-interface evidence.");
   }
   if (base.includes("qc")) {
-    return pair("质量控制实现。", "Quality-control implementation.");
+    return pair("Quality-control implementation.", "Quality-control implementation.");
   }
   if (base.includes("regulation")) {
-    return pair("差异调控或统计评分实现。", "Differential-regulation or statistical-scoring implementation.");
+    return pair("Differential-regulation or statistical-scoring implementation.", "Differential-regulation or statistical-scoring implementation.");
   }
   if (base.includes("plot")) {
-    return pair("可视化或下游结果展示实现。", "Visualization or downstream result-display implementation.");
+    return pair("Visualization or downstream result-display implementation.", "Visualization or downstream result-display implementation.");
   }
   if (item.path.includes("manuscript/") || item.path.includes("examples/")) {
-    return pair("复现实例或 manuscript 分支证据。", "Reproduction example or manuscript-branch evidence.");
+    return pair("Reproduction example or manuscript-branch evidence.", "Reproduction example or manuscript-branch evidence.");
   }
-  return pair("主实现文件。", "Main implementation file.");
+  return pair("Main implementation file.", "Main implementation file.");
 }
 
 function buildReferenceItems(entries) {
@@ -831,7 +1497,7 @@ function buildReferenceItems(entries) {
     return {
       label: entry.path,
       url: entry.githubUrl,
-      noteZh: note.zh,
+      noteZh: note.en,
       noteEn: note.en
     };
   });
@@ -849,8 +1515,8 @@ function buildPaperReferenceItems(paperEvidence) {
       label: paper.resolvedTitle || paper.requestedTitle || "Paper source",
       url: preferredUrl,
       noteZh: paper.abstract
-        ? `论文摘要证据：${paper.abstract}`
-        : "论文来源证据。",
+        ? `Paper abstract evidence: ${paper.abstract}`
+        : "Paper-source evidence.",
       noteEn: paper.abstract
         ? `Paper abstract evidence: ${paper.abstract}`
         : "Paper-source evidence."
@@ -865,25 +1531,27 @@ function inferReferences(evidence, paperEvidence) {
   const papersItems = buildReferenceItems([
     ...ensureArray(sections.readme).slice(0, 2),
     ...ensureArray(sections.examples).slice(0, 4),
+    ...ensureArray(sections.notebooks).slice(0, 2),
+    ...ensureArray(sections.docs).slice(0, 2),
     ...ensureArray(sections.dependencies).slice(0, 2)
   ]);
 
   const paperSections = [];
   if (paperItems.length > 0) {
     paperSections.push({
-      title: "Paper evidence / 论文证据",
+      title: "Paper evidence",
       items: paperItems
     });
   }
   paperSections.push({
-    title: "Repository and reproduction evidence / 仓库与复现证据",
+    title: "Repository and reproduction evidence",
     items: papersItems
   });
 
   return {
     methods: [
       {
-        title: "Core implementation / 核心实现",
+        title: "Core implementation",
         items: methodsItems
       }
     ],
@@ -891,46 +1559,307 @@ function inferReferences(evidence, paperEvidence) {
   };
 }
 
+function inferFunctionCallGraphEvidence(evidence) {
+  const sections = evidence.selections || {};
+  const metadataCalls = ensureArray(evidence.miningMetadata?.function_call_graph)
+    .map((item) => item.source);
+  return dedupe([
+    ...metadataCalls,
+    ...ensureArray(sections.notebooks).map((entry) => entry.path),
+    ...ensureArray(sections.examples).map((entry) => entry.path),
+    ...ensureArray(sections.entrypoints).map((entry) => entry.path)
+  ]).slice(0, 8);
+}
+
+function sharedItems(left, right) {
+  const rightSet = new Set(ensureArray(right));
+  return ensureArray(left).filter((item) => rightSet.has(item));
+}
+
+function isImplementationPath(filePath) {
+  return /\.(r|py|jl|m|sh)$/i.test(filePath || "")
+    && !/readme|docs?|notebooks?|examples?|manuscript/i.test(filePath || "");
+}
+
+function structuredDagEvidence(evidence) {
+  const metadata = evidence.miningMetadata || {};
+  return {
+    execution_order: ensureArray(metadata.execution_order),
+    variable_flow: ensureArray(metadata.variable_flow),
+    file_flow: ensureArray(metadata.file_flow),
+    function_call_graph: ensureArray(metadata.function_call_graph)
+  };
+}
+
+function inferDagEdgeReason(previous, current, hasExampleOrder, structuredSignals) {
+  const previousOutputs = new Set(previous.output || []);
+  const currentInputs = new Set(current.input || []);
+  const shared = [...previousOutputs].filter((item) => currentInputs.has(item));
+  if (shared.length > 0) {
+    return {
+      inference: "file_flow",
+      detail: `Previous output feeds current input: ${shared.join(", ")}`
+    };
+  }
+
+  const sharedVariables = sharedItems(previous.input, current.input);
+  if (sharedVariables.length > 0 || structuredSignals.variable_flow.length > 0) {
+    return {
+      inference: "variable_flow",
+      detail: sharedVariables.length > 0
+        ? `Both steps operate on the same declared variable(s): ${sharedVariables.join(", ")}`
+        : "Repository static analysis found variable assignments in notebooks or scripts."
+    };
+  }
+
+  const sharedImplementation = sharedItems(previous.evidence, current.evidence)
+    .filter((item) => isImplementationPath(item));
+  if (sharedImplementation.length > 0 || structuredSignals.function_call_graph.length > 0) {
+    return {
+      inference: "function_call_graph",
+      detail: sharedImplementation.length > 0
+        ? `Shared implementation evidence supports this edge: ${sharedImplementation.slice(0, 3).join(", ")}`
+        : "Repository static analysis found function-call evidence in notebooks or scripts."
+    };
+  }
+
+  const previousText = `${previous.id} ${previous.titleEn} ${previous.detailsEn}`.toLowerCase();
+  const currentText = `${current.id} ${current.titleEn} ${current.detailsEn}`.toLowerCase();
+  if (/construct|build|prepare|validate/.test(previousText) && /run|calculate|rank|report|visualize/.test(currentText)) {
+    return {
+      inference: "semantic_dependency",
+      detail: "The current step semantically depends on the previous prepared model, matrix, or validation state."
+    };
+  }
+
+  if (hasExampleOrder) {
+    return {
+      inference: "notebook_script_execution_order",
+      detail: "Example, notebook, or demo-script order supports this adjacent edge."
+    };
+  }
+
+  return {
+    inference: "manual_fallback_rule",
+    detail: "No stronger variable/file/call evidence was available; use canonical adjacent workflow order."
+  };
+}
+
+function inferDagEdges(workflowSteps, evidence) {
+  const buckets = workflowEvidenceBuckets(evidence);
+  const structuredSignals = structuredDagEvidence(evidence);
+  const hasExampleOrder = buckets.running_examples.length > 0
+    || buckets.official_docs.length > 0
+    || structuredSignals.execution_order.length > 0;
+  const callGraphEvidence = inferFunctionCallGraphEvidence(evidence);
+  const edges = [];
+
+  for (let index = 1; index < workflowSteps.length; index += 1) {
+    const previous = workflowSteps[index - 1];
+    const current = workflowSteps[index];
+    const reason = inferDagEdgeReason(previous, current, hasExampleOrder, structuredSignals);
+    edges.push({
+      source: previous.id || previous.name || slugify(previous.titleEn),
+      target: current.id || current.name || slugify(current.titleEn),
+      inference: reason.inference,
+      detail: reason.detail,
+      structured_signals: {
+        execution_order: structuredSignals.execution_order.slice(0, 4),
+        variable_flow: structuredSignals.variable_flow.slice(0, 4),
+        file_flow: structuredSignals.file_flow.slice(0, 4),
+        function_call_graph: structuredSignals.function_call_graph.slice(0, 4)
+      },
+      evidence: dedupe([
+        ...ensureArray(previous.evidence).slice(0, 2),
+        ...ensureArray(current.evidence).slice(0, 2),
+        ...callGraphEvidence.slice(0, 2)
+      ]),
+      evidence_sources: evidenceTraceItems(dedupe([
+        ...ensureArray(previous.evidence).slice(0, 2),
+        ...ensureArray(current.evidence).slice(0, 2),
+        ...callGraphEvidence.slice(0, 2)
+      ]), evidencePriorityLabel, `dag_edge.${previous.id || previous.name}->${current.id || current.name}`),
+      evidence_priority_class: reason.inference,
+      evidence_priority: dagInferencePriority()
+    });
+  }
+
+  return edges;
+}
+
 function inferWorkflowSteps(evidence, domain, analysisType) {
-  const readmePaths = ensureArray(evidence.selections?.readme).slice(0, 1).map((entry) => entry.path);
-  const entrypointPaths = ensureArray(evidence.selections?.entrypoints).slice(0, 4).map((entry) => entry.path);
-  const examplePaths = ensureArray(evidence.selections?.examples).slice(0, 4).map((entry) => entry.path);
+  const buckets = workflowEvidenceBuckets(evidence);
+  const readmePaths = buckets.readme.slice(0, 1);
+  const entrypointPaths = buckets.source_api.slice(0, 4);
+  const examplePaths = buckets.running_examples.slice(0, 4);
   const hasExamples = examplePaths.length > 0;
 
+  if (domain === "single-cell" && analysisType === "tf-perturbation") {
+    const evidenceBase = exampleFirstEvidence(evidence, 6);
+    return [
+      makeWorkflowStep({
+        id: "00_validate_input",
+        title: "validate_input",
+        description: "Validate scRNA-seq object, cell annotation, perturbation TF list, and optional base GRN inputs.",
+        evidence: evidenceBase.slice(0, 3),
+        input: ["config", "scRNA_seq_object", "cell_annotation", "perturbation_tf_list"],
+        output: ["qc/input_validation.json"]
+      }),
+      makeWorkflowStep({
+        id: "01_prepare_input",
+        title: "prepare_scRNA_object",
+        description: "Prepare the single-cell object and grouping labels for CellOracle-style GRN modeling.",
+        evidence: evidenceBase.slice(0, 3),
+        input: ["scRNA_seq_object", "cell_annotation"],
+        output: ["prepared/scrna_object_summary.json"]
+      }),
+      makeWorkflowStep({
+        id: "02_prepare_base_grn",
+        title: "prepare_or_load_base_GRN",
+        description: "Load a user-provided base GRN, build one from scATAC/motif evidence, or select an appropriate species-specific default.",
+        evidence: evidenceBase.slice(0, 3),
+        input: ["base_grn", "scATAC_peaks", "species"],
+        output: ["prepared/base_grn.csv"]
+      }),
+      makeWorkflowStep({
+        id: "03_build_model",
+        title: "build_predictive_GRN_model",
+        description: "Build the Oracle object, run imputation, infer cell-state-specific GRNs, and fit predictive GRN models.",
+        evidence: evidenceBase,
+        input: ["prepared/scrna_object_summary.json", "prepared/base_grn.csv"],
+        output: ["models/grn_model.json"]
+      }),
+      makeWorkflowStep({
+        id: "04_run_perturbation",
+        title: "run_TF_perturbation",
+        description: "Run in silico TF perturbation for requested TF targets and calculate transition vectors.",
+        evidence: evidenceBase,
+        input: ["models/grn_model.json", "perturbation_tf_list"],
+        output: ["results/perturbation_vectors.csv", "results/transition_vectors.csv"]
+      }),
+      makeWorkflowStep({
+        id: "05_generate_report",
+        title: "generate_report",
+        description: "Generate figures, QC summary, biological interpretation notes, limitations, and reproducibility metadata.",
+        layer: "wrapper",
+        evidence: dedupe([...readmePaths, ...examplePaths]),
+        input: ["results/perturbation_vectors.csv", "qc/input_validation.json"],
+        output: ["reports/report_template.md", "result.json"]
+      })
+    ];
+  }
+
   if (domain === "single-cell" && analysisType === "virtual-knockout") {
+    const evidenceBase = exampleFirstEvidence(evidence, 6);
+    return [
+      makeWorkflowStep({
+        id: "00_validate_input",
+        title: "validate_input",
+        description: "Validate WT matrix path, matrix orientation, raw-count state, and knockout gene.",
+        evidence: evidenceBase.slice(0, 3),
+        input: ["config", "wt_expression_matrix", "knockout_gene"],
+        output: ["qc/input_validation.json"]
+      }),
+      makeWorkflowStep({
+        id: "01_preprocess_expression_matrix",
+        title: "preprocess_expression_matrix",
+        description: "Filter genes and cells, confirm matrix orientation, and prepare the WT expression matrix.",
+        evidence: evidenceBase,
+        input: ["wt_expression_matrix"],
+        output: ["prepared/wt_matrix.csv"]
+      }),
+      makeWorkflowStep({
+        id: "02_construct_wt_scgrn",
+        title: "construct_wt_scGRN",
+        description: "Construct the wild-type single-cell gene regulatory network.",
+        evidence: evidenceBase,
+        input: ["prepared/wt_matrix.csv"],
+        output: ["models/wt_scgrn.csv"]
+      }),
+      makeWorkflowStep({
+        id: "03_simulate_gene_knockout",
+        title: "simulate_gene_knockout",
+        description: "Simulate knockout by perturbing target-gene regulatory edges.",
+        evidence: evidenceBase,
+        input: ["models/wt_scgrn.csv", "knockout_gene"],
+        output: ["models/ko_scgrn.csv"]
+      }),
+      makeWorkflowStep({
+        id: "04_run_manifold_alignment",
+        title: "run_manifold_alignment",
+        description: "Align WT and KO network manifolds.",
+        evidence: evidenceBase,
+        input: ["models/wt_scgrn.csv", "models/ko_scgrn.csv"],
+        output: ["results/manifold_alignment.json"]
+      }),
+      makeWorkflowStep({
+        id: "05_calculate_differential_regulation",
+        title: "calculate_differential_regulation",
+        description: "Calculate differential regulation between WT and KO networks.",
+        evidence: evidenceBase,
+        input: ["results/manifold_alignment.json"],
+        output: ["results/differential_regulation.csv"]
+      }),
+      makeWorkflowStep({
+        id: "06_rank_perturbed_genes",
+        title: "rank_perturbed_genes",
+        description: "Rank genes by perturbation or differential-regulation score.",
+        evidence: evidenceBase,
+        input: ["results/differential_regulation.csv"],
+        output: ["results/perturbed_gene_ranking.csv"]
+      }),
+      makeWorkflowStep({
+        id: "07_run_pathway_enrichment",
+        title: "run_pathway_enrichment",
+        description: "Run optional pathway or GO enrichment when organism and database support it.",
+        evidence: dedupe([...readmePaths, ...examplePaths]),
+        input: ["results/perturbed_gene_ranking.csv", "enrichment_database"],
+        output: ["results/pathway_enrichment.csv"]
+      }),
+      makeWorkflowStep({
+        id: "08_generate_report",
+        title: "generate_report",
+        description: "Generate QC summary, ranked outputs, interpretation caveats, and reproducibility metadata.",
+        layer: "wrapper",
+        evidence: dedupe([...readmePaths, ...examplePaths]),
+        input: ["results/differential_regulation.csv", "results/perturbed_gene_ranking.csv"],
+        output: ["reports/report_template.md", "result.json"]
+      })
+    ];
+
     return [
       {
-        titleZh: "路由并校验输入 manifest",
+        titleZh: "Route and validate the input manifest",
         titleEn: "Route and validate the input manifest",
-        detailsZh: "先确认任务属于 WT-only virtual knockout，再检查矩阵方向、计数状态和 knockout gene 字段。",
+        detailsZh: "First confirm that the task belongs to WT-only virtual knockout, then validate matrix orientation, count-state assumptions, and knockout-gene fields.",
         detailsEn: "First confirm that the task belongs to WT-only virtual knockout, then validate matrix orientation, count-state assumptions, and knockout-gene fields.",
         layer: "core",
         evidence: dedupe([...readmePaths, ...entrypointPaths.slice(0, 2)])
       },
       {
-        titleZh: "规划核心 virtual knockout 路径",
+        titleZh: "Plan the core virtual-knockout path",
         titleEn: "Plan the core virtual-knockout path",
-        detailsZh: "按源码证据组织 QC、网络构建、方向约束、扰动模拟以及差异调控评分。",
+        detailsZh: "Use the implementation evidence to organize QC, network construction, directionality constraints, perturbation simulation, and differential-regulation scoring.",
         detailsEn: "Use the implementation evidence to organize QC, network construction, directionality constraints, perturbation simulation, and differential-regulation scoring.",
         layer: "core",
         evidence: entrypointPaths
       },
       {
-        titleZh: "显式隔离 manuscript 复现分支",
+        titleZh: "Explicitly isolate manuscript reproduction branches",
         titleEn: "Explicitly isolate manuscript reproduction branches",
         detailsZh: hasExamples
-          ? "只有在分析模式显式允许时，才把仓库中的 manuscript 或 example 分支纳入复现计划。"
-          : "如果缺少官方 example 或 manuscript 证据，则不要臆造复现分支。",
+          ? "Only include manuscript or example branches when analysis mode explicitly allows reproduction."
+          : "If official example or manuscript evidence is missing, do not invent reproduction branches.",
         detailsEn: hasExamples
           ? "Only allow manuscript or example branches into the plan when the analysis mode explicitly enables reproduction."
           : "If the repository lacks official examples or manuscript evidence, do not invent reproduction branches.",
         layer: "reproduction",
-        evidence: examplePaths.length > 0 ? examplePaths : ["未在论文或代码中确认 / Not confirmed in paper or code"]
+        evidence: examplePaths.length > 0 ? examplePaths : ["Not confirmed in paper or code"]
       },
       {
-        titleZh: "生成结果合同与报告",
+        titleZh: "Assemble the result contract and report",
         titleEn: "Assemble the result contract and report",
-        detailsZh: "无论是否 dry-run，都要输出标准 bundle、参数解析、运行时探测、QC 摘要和 caveats。",
+        detailsZh: "Whether or not the run is a dry-run, emit the standard bundle, parameter resolution, runtime probe, QC summary, and caveats.",
         detailsEn: "Whether or not the run is a dry-run, emit the standard bundle, parameter resolution, runtime probe, QC summary, and caveats.",
         layer: "wrapper",
         evidence: dedupe([...readmePaths, ...ensureArray(evidence.selections?.dependencies).slice(0, 1).map((entry) => entry.path)])
@@ -940,25 +1869,25 @@ function inferWorkflowSteps(evidence, domain, analysisType) {
 
   return [
     {
-      titleZh: "校验输入合同",
+      titleZh: "Validate the input contract",
       titleEn: "Validate the input contract",
-      detailsZh: "先检查 manifest、数据对象状态和所需文件路径。",
+      detailsZh: "First validate the manifest, data-object state, and required file paths.",
       detailsEn: "First validate the manifest, data-object state, and required file paths.",
       layer: "core",
       evidence: dedupe([...readmePaths, ...entrypointPaths.slice(0, 1)])
     },
     {
-      titleZh: "规划核心方法步骤",
+      titleZh: "Plan the core method steps",
       titleEn: "Plan the core method steps",
-      detailsZh: "根据主实现文件整理核心方法顺序，并保持证据映射。",
+      detailsZh: "Use the main implementation files to map the core method order while preserving evidence references.",
       detailsEn: "Use the main implementation files to map the core method order while preserving evidence references.",
       layer: "core",
       evidence: entrypointPaths
     },
     {
-      titleZh: "生成结果合同与报告",
+      titleZh: "Assemble the result contract and report",
       titleEn: "Assemble the result contract and report",
-      detailsZh: "输出标准结果目录、机器可读结果和报告。",
+      detailsZh: "Emit the standard result bundle, machine-readable result, and report.",
       detailsEn: "Emit the standard result bundle, machine-readable result, and report.",
       layer: "wrapper",
       evidence: readmePaths
@@ -967,6 +1896,17 @@ function inferWorkflowSteps(evidence, domain, analysisType) {
 }
 
 function inferRequiredOutputs(domain, analysisType) {
+  if (domain === "single-cell" && analysisType === "tf-perturbation") {
+    return [
+      "qc_summary",
+      "base_grn",
+      "predictive_grn_model",
+      "perturbation_vectors",
+      "transition_vectors",
+      "report"
+    ];
+  }
+
   if (domain === "single-cell" && analysisType === "virtual-knockout") {
     return [
       "qc_summary",
@@ -983,13 +1923,69 @@ function inferRequiredOutputs(domain, analysisType) {
   return ["qc_summary", "analysis_summary", "primary_result_table"];
 }
 
-function inferExecutionContract(evidence, domain, analysisType, runtime, primaryTool) {
+function inferRuntimeAdapters(evidence, runtime, algorithmClassification) {
+  const implementation = algorithmClassification?.implementation || {};
+  const executionModes = implementation.execution_modes || [];
+  const adapters = [];
+  if (executionModes.includes("python_api")) {
+    adapters.push({
+      adapter_id: "python_api",
+      runtime: "python",
+      mode: "python_api",
+      status: runtime === "python" ? "candidate" : "available_as_secondary",
+      entrypoint_evidence: evidenceTraceItems(
+        ensureArray(evidence.selections?.entrypoints).filter((entry) => /\.py$/i.test(entry.path)).map((entry) => entry.path),
+        evidencePriorityLabel,
+        "runtime_adapter.python_api"
+      )
+    });
+  }
+  if (executionModes.includes("r_api")) {
+    adapters.push({
+      adapter_id: "rscript",
+      runtime: "r",
+      mode: "r_api",
+      status: runtime === "r" ? "candidate" : "available_as_secondary",
+      entrypoint_evidence: evidenceTraceItems(
+        ensureArray(evidence.selections?.entrypoints).filter((entry) => /\.r$/i.test(entry.path)).map((entry) => entry.path),
+        evidencePriorityLabel,
+        "runtime_adapter.r_api"
+      )
+    });
+  }
+  if (executionModes.includes("notebook")) {
+    adapters.push({
+      adapter_id: "notebook",
+      runtime: "jupyter",
+      mode: "notebook",
+      status: "candidate",
+      entrypoint_evidence: evidenceTraceItems(
+        ensureArray(evidence.selections?.notebooks).map((entry) => entry.path),
+        evidencePriorityLabel,
+        "runtime_adapter.notebook"
+      )
+    });
+  }
+  if (adapters.length === 0) {
+    adapters.push({
+      adapter_id: "dry_run_only",
+      runtime: "python",
+      mode: "wrapper_only",
+      status: "fallback",
+      blocked_reason: "No Python API, R API, CLI, or notebook entrypoint was confirmed from repository evidence.",
+      entrypoint_evidence: []
+    });
+  }
+  return adapters;
+}
+
+function inferExecutionContract(evidence, domain, analysisType, runtime, primaryTool, algorithmClassification) {
   const runtimeTargets = [
     {
       name: "python",
       executable: "python",
       required: true,
-      zh: "Python orchestrator 运行时。",
+      zh: "Python orchestrator runtime.",
       en: "Python orchestrator runtime."
     }
   ];
@@ -999,89 +1995,146 @@ function inferExecutionContract(evidence, domain, analysisType, runtime, primary
       name: "Rscript",
       executable: "Rscript",
       required: true,
-      zh: `${primaryTool} native execution 运行时。`,
+      zh: `${primaryTool} native execution runtime.`,
       en: `${primaryTool} native execution runtime.`
     });
   }
 
+  const workflowSteps = inferWorkflowSteps(evidence, domain, analysisType);
+  const dagEdges = inferDagEdges(workflowSteps, evidence);
+
+  const runtimeAdapters = inferRuntimeAdapters(evidence, runtime, algorithmClassification);
   return {
     runtime_targets: runtimeTargets,
-    workflow_steps: inferWorkflowSteps(evidence, domain, analysisType),
+    runtime_adapters: runtimeAdapters,
+    workflow_mining_priority: workflowMiningPriority(),
+    workflow_steps: workflowSteps,
+    dag_edges: dagEdges,
     command_templates: [
       `echo Planning ${primaryTool}`,
       "echo Manifest: {manifest_path}",
       "echo Output directory: {out_dir}"
     ],
     required_outputs: inferRequiredOutputs(domain, analysisType),
-    supports_native_run: false
+    supports_native_run: false,
+    native_run_status: {
+      status: "blocked_until_adapter_is_implemented",
+      reason: "The generated child skill keeps dry-run behavior until a source-backed adapter is explicitly implemented and tested."
+    }
   };
 }
 
 function inferQcContract(domain, analysisType, runtime) {
+  if (domain === "single-cell" && analysisType === "tf-perturbation") {
+    return {
+      rules: [
+        {
+          metric: "input_contract_integrity",
+          zh: "Check required scRNA-seq object, annotation, and perturbation TF fields.",
+          en: "Check required scRNA-seq object, annotation, and perturbation TF fields.",
+          passZh: "All required manifest fields and files are available.",
+          passEn: "All required manifest fields and files are available.",
+          warnZh: "Optional base GRN or pseudotime inputs are absent; workflow will use fallback behavior.",
+          warnEn: "Optional base GRN or pseudotime inputs are absent; workflow will use fallback behavior.",
+          failZh: "Required input is missing or unreadable.",
+          failEn: "Required input is missing or unreadable."
+        },
+        {
+          metric: "tf_and_grn_readiness",
+          zh: "Check TF targets in expression matrix and base GRN.",
+          en: "Check TF targets in expression matrix and base GRN.",
+          passZh: "TF targets are present and a base GRN source is available.",
+          passEn: "TF targets are present and a base GRN source is available.",
+          warnZh: "Some TF targets or base GRN support require user confirmation.",
+          warnEn: "Some TF targets or base GRN support require user confirmation.",
+          failZh: "No valid perturbation target or base GRN source is available.",
+          failEn: "No valid perturbation target or base GRN source is available."
+        },
+        {
+          metric: "transition_vector_output",
+          zh: "Check perturbation and transition vector output shape.",
+          en: "Check perturbation and transition vector output shape.",
+          passZh: "Perturbation and transition-vector outputs are non-empty.",
+          passEn: "Perturbation and transition-vector outputs are non-empty.",
+          warnZh: "Outputs exist but may need biological caveats.",
+          warnEn: "Outputs exist but may need biological caveats.",
+          failZh: "Expected perturbation outputs were not generated.",
+          failEn: "Expected perturbation outputs were not generated."
+        }
+      ],
+      validation_scenarios: [
+        pair("Dry-run validates CellOracle input contract.", "Dry-run validates CellOracle input contract."),
+        pair("Missing TF target fails input validation.", "Missing TF target fails input validation.")
+      ],
+      interpretation_boundary: [
+        {
+          status: "pass",
+          zh: "A pass supports normal interpretation with reported caveats.",
+          en: "A pass supports normal interpretation with reported caveats."
+        },
+        {
+          status: "warn",
+          zh: "A warning requires explicit caveats in the report.",
+          en: "A warning requires explicit caveats in the report."
+        },
+        {
+          status: "fail",
+          zh: "A failure must not be treated as a reliable biological result.",
+          en: "A failure must not be treated as a reliable biological result."
+        }
+      ]
+    };
+  }
+
   if (domain === "single-cell" && analysisType === "virtual-knockout") {
     return {
       rules: [
         {
           metric: "input_contract_integrity",
-          zh: "检查 WT 输入矩阵路径、方向、计数状态和 knockout gene 是否满足合同。",
+          zh: "Check whether the WT matrix path, orientation, count state, and knockout gene satisfy the contract.",
           en: "Check whether the WT matrix path, orientation, count state, and knockout gene satisfy the contract.",
-          passZh: "输入合同通过，可以进入执行规划。",
+          passZh: "The input contract passes and execution planning may continue.",
           passEn: "The input contract passes and execution planning may continue.",
-          warnZh: "dry-run 仅完成预检，尚未形成方法级 QC 结论。",
+          warnZh: "The dry-run only completed preflight checks and has not produced method-level QC conclusions.",
           warnEn: "The dry-run only completed preflight checks and has not produced method-level QC conclusions.",
-          failZh: "输入违反合同，结果不能当作可靠分析执行。",
+          failZh: "The input violates the contract and the output must not be treated as a reliable executed analysis.",
           failEn: "The input violates the contract and the output must not be treated as a reliable executed analysis."
         },
         {
           metric: "single_cell_preflight",
-          zh: "检查单细胞输入是否保留基因名，并避免把已标准化矩阵冒充原始计数。",
+          zh: "Check that gene names are retained and that a normalized matrix is not misrepresented as raw counts.",
           en: "Check that gene names are retained and that a normalized matrix is not misrepresented as raw counts.",
-          passZh: "对象状态满足单细胞扰动工作流前提。",
+          passZh: "The object state satisfies the prerequisites for a single-cell perturbation workflow.",
           passEn: "The object state satisfies the prerequisites for a single-cell perturbation workflow.",
-          warnZh: "对象状态部分依赖 manifest 声明，仍需在正式运行前核实。",
+          warnZh: "Part of the object state still depends on manifest declarations and should be verified before a full run.",
           warnEn: "Part of the object state still depends on manifest declarations and should be verified before a full run.",
-          failZh: "对象状态与方法要求不一致。",
+          failZh: "The object state is inconsistent with the method requirements.",
           failEn: "The object state is inconsistent with the method requirements."
         },
         {
           metric: "runtime_readiness",
           requires_runtime: true,
-          zh: "检查 Python 和 Rscript 是否可用。",
+          zh: "Check whether Python and Rscript are available.",
           en: "Check whether Python and Rscript are available.",
-          passZh: "运行时已就绪。",
+          passZh: "Required runtimes are ready.",
           passEn: "Required runtimes are ready.",
-          warnZh: "dry-run 可以继续，但 native execution 尚未真正消耗方法运行时。",
+          warnZh: "The dry-run may continue, but native execution has not yet consumed the method runtime.",
           warnEn: "The dry-run may continue, but native execution has not yet consumed the method runtime.",
-          failZh: "必需运行时缺失，应返回 blocked 状态。",
+          failZh: "A required runtime is missing and the wrapper should return a blocked status.",
           failEn: "A required runtime is missing and the wrapper should return a blocked status."
         }
       ],
       validation_scenarios: [
-        pair(
-          "最小 smoke test：manifest 有效、dry-run 成功、bundle 完整。",
-          "Minimum smoke test: valid manifest, successful dry-run, and a complete result bundle."
-        ),
-        pair(
-          "缺失运行时测试：模拟 Rscript 缺失并返回 blocked_runtime_missing。",
-          "Missing-runtime test: simulate a missing Rscript and return blocked_runtime_missing."
-        )
+        pair("Minimum smoke test: valid manifest, successful dry-run, and a complete result bundle.", "Minimum smoke test: valid manifest, successful dry-run, and a complete result bundle."),
+        pair("Missing-runtime test: simulate a missing Rscript and return blocked_runtime_missing.", "Missing-runtime test: simulate a missing Rscript and return blocked_runtime_missing.")
       ],
       interpretation_boundary: [
-        pair(
-          "通过仅表示合同和预检查通过，不等同于生物学结论已经成立。", 
-          "A pass only means the contract and preflight checks succeeded; it does not mean the biological conclusion is already established."
-        ),
-        pair(
-          "警告表示结果可用于规划或报告，但必须保留 caveat。", 
-          "A warning means the output may guide planning or reporting, but caveats must remain visible."
-        ),
-        pair(
-          "失败表示结果不能写成可信结论。", 
-          "A failure means the output must not be written up as a reliable conclusion."
-        )
+        pair("A pass only means the contract and preflight checks succeeded; it does not mean the biological conclusion is already established.", "A pass only means the contract and preflight checks succeeded; it does not mean the biological conclusion is already established."),
+        pair("A warning means the output may guide planning or reporting, but caveats must remain visible.", "A warning means the output may guide planning or reporting, but caveats must remain visible."),
+        pair("A failure means the output must not be written up as a reliable conclusion.", "A failure means the output must not be written up as a reliable conclusion.")
       ].map((item, index) => ({
         status: ["pass", "warn", "fail"][index],
-        zh: item.zh,
+        zh: item.en,
         en: item.en
       }))
     };
@@ -1091,38 +2144,35 @@ function inferQcContract(domain, analysisType, runtime) {
     rules: [
       {
         metric: "input_contract_integrity",
-        zh: "检查输入路径和对象状态是否满足合同。",
+        zh: "Check whether input paths and object state satisfy the contract.",
         en: "Check whether input paths and object state satisfy the contract.",
-        passZh: "输入合同通过。",
+        passZh: "The input contract passes.",
         passEn: "The input contract passes.",
-        warnZh: "dry-run 只完成了预检。",
+        warnZh: "The dry-run only completed preflight checks.",
         warnEn: "The dry-run only completed preflight checks.",
-        failZh: "输入违反合同。",
+        failZh: "The input violates the contract.",
         failEn: "The input violates the contract."
       },
       {
         metric: "runtime_readiness",
         requires_runtime: true,
-        zh: `检查 ${runtime} 运行时是否可用。`,
+        zh: `Check whether the ${runtime} runtime is available.`,
         en: `Check whether the ${runtime} runtime is available.`,
-        passZh: "运行时已就绪。",
+        passZh: "The runtime is ready.",
         passEn: "The runtime is ready.",
-        warnZh: "dry-run 可以继续，但 native execution 尚未验证。",
+        warnZh: "The dry-run may continue, but native execution is not yet validated.",
         warnEn: "The dry-run may continue, but native execution is not yet validated.",
-        failZh: "运行时缺失，应返回 blocked 状态。",
+        failZh: "The runtime is missing and the wrapper should return a blocked status.",
         failEn: "The runtime is missing and the wrapper should return a blocked status."
       }
     ],
     validation_scenarios: [
-      pair(
-        "最小 smoke test：manifest 有效且 bundle 完整。",
-        "Minimum smoke test: valid manifest and complete bundle."
-      )
+      pair("Minimum smoke test: valid manifest and complete bundle.", "Minimum smoke test: valid manifest and complete bundle.")
     ],
     interpretation_boundary: [
-      { status: "pass", ...pair("合同与预检查通过。", "The contract and preflight checks passed.") },
-      { status: "warn", ...pair("结果可用但必须保留 caveat。", "The result may be usable but must retain caveats.") },
-      { status: "fail", ...pair("结果不能当作可靠分析输出。", "The result must not be treated as a reliable analysis output.") }
+      { status: "pass", ...pair("The contract and preflight checks passed.", "The contract and preflight checks passed.") },
+      { status: "warn", ...pair("The result may be usable but must retain caveats.", "The result may be usable but must retain caveats.") },
+      { status: "fail", ...pair("The result must not be treated as a reliable analysis output.", "The result must not be treated as a reliable analysis output.") }
     ]
   };
 }
@@ -1136,7 +2186,19 @@ function inferOutputBundle() {
       "tables",
       "figures",
       "figure_data",
+      "parameters",
+      "parameters/resolved_parameters.json",
+      "qc",
+      "qc/input_validation.json",
+      "qc/runtime_probe.json",
+      "qc/qc_summary.json",
+      "workflow",
+      "workflow/steps.json",
+      "workflow/dag_edges.json",
       "reproducibility",
+      "reproducibility/plan.json",
+      "reproducibility/execution_plan.json",
+      "reproducibility/evidence_summary.json",
       "logs"
     ],
     result_fields: [
@@ -1146,20 +2208,16 @@ function inferOutputBundle() {
       "runtime_probe",
       "input_validation",
       "parameter_resolution",
+      "workflow_summary",
+      "evidence_summary",
       "qc_summary",
       "artifacts",
       "caveats",
       "citations_used"
     ],
     bundle_notes: [
-      pair(
-        "即使是 dry-run，也必须产出完整目录结构和机器可读 result.json。",
-        "Even a dry-run must emit the full directory structure and a machine-readable result.json."
-      ),
-      pair(
-        "不要把 manuscript 复现实例的产物静默写成核心方法已经得出的结论。",
-        "Do not silently rewrite manuscript-reproduction artifacts as if they were core-method conclusions."
-      )
+      pair("Even a dry-run must emit the full directory structure and a machine-readable result.json.", "Even a dry-run must emit the full directory structure and a machine-readable result.json."),
+      pair("Do not silently rewrite manuscript-reproduction artifacts as if they were core-method conclusions.", "Do not silently rewrite manuscript-reproduction artifacts as if they were core-method conclusions.")
     ]
   };
 }
@@ -1167,15 +2225,12 @@ function inferOutputBundle() {
 function inferReproducibilityContract() {
   return {
     capture_items: [
-      pair("输入 manifest 路径和关键状态字段。", "Input manifest path and key state fields."),
-      pair("参数解析来源和默认值理由。", "Parameter-resolution sources and default rationales."),
-      pair("运行时探测结果、计划命令和安装记录。", "Runtime probe results, planned commands, and installation records.")
+      pair("Input manifest path and key state fields.", "Input manifest path and key state fields."),
+      pair("Parameter-resolution sources and default rationales.", "Parameter-resolution sources and default rationales."),
+      pair("Runtime probe results, planned commands, and installation records.", "Runtime probe results, planned commands, and installation records.")
     ],
     install_policy: [
-      pair(
-        "如果目标运行环境缺少依赖，只在该环境内安装，并把命令写入 reproducibility 目录。",
-        "If the target runtime environment lacks dependencies, install them only inside that environment and record the commands under reproducibility."
-      )
+      pair("If the target runtime environment lacks dependencies, install them only inside that environment and record the commands under reproducibility.", "If the target runtime environment lacks dependencies, install them only inside that environment and record the commands under reproducibility.")
     ]
   };
 }
@@ -1183,24 +2238,24 @@ function inferReproducibilityContract() {
 function inferFailureModes(domain, analysisType, runtime) {
   const base = [
     {
-      conditionZh: "输入对象状态与合同不一致",
+      conditionZh: "The input object state is inconsistent with the contract",
       conditionEn: "The input object state is inconsistent with the contract",
-      recoveryZh: "要求用户修正 manifest，并显式声明对象状态而不是让 wrapper 自行猜测。",
+      recoveryZh: "Require the user to correct the manifest and explicitly declare object state instead of letting the wrapper guess.",
       recoveryEn: "Require the user to correct the manifest and explicitly declare object state instead of letting the wrapper guess."
     },
     {
-      conditionZh: `${runtime === "r" ? "Rscript" : "主要运行时"} 缺失`,
+      conditionZh: `${runtime === "r" ? "Rscript" : "The primary runtime"} is missing`,
       conditionEn: `${runtime === "r" ? "Rscript" : "The primary runtime"} is missing`,
-      recoveryZh: "返回 blocked_runtime_missing，并在目标环境安装所需运行时后重试。",
+      recoveryZh: "Return blocked_runtime_missing and retry after installing the required runtime in the target environment.",
       recoveryEn: "Return blocked_runtime_missing and retry after installing the required runtime in the target environment."
     }
   ];
 
   if (domain === "single-cell" && analysisType === "virtual-knockout") {
     base.push({
-      conditionZh: "用户把 manuscript 复现分支当作核心方法输入要求",
+      conditionZh: "The user treats manuscript reproduction branches as core-method input requirements",
       conditionEn: "The user treats manuscript reproduction branches as core-method input requirements",
-      recoveryZh: "在报告里显式标记复现分支，只把 WT-only 路径保留为最小执行合同。",
+      recoveryZh: "Label reproduction branches explicitly in the report and keep the WT-only path as the minimum execution contract.",
       recoveryEn: "Label reproduction branches explicitly in the report and keep the WT-only path as the minimum execution contract."
     });
   }
@@ -1229,13 +2284,13 @@ function inferCitations(paperTitle, paperUrl, githubUrl, paperEvidence) {
     {
       label: `${paperTitle} paper`,
       url: preferredPaperUrl,
-      noteZh: "主论文链接。",
+      noteZh: "Primary paper link.",
       noteEn: "Primary paper link."
     },
     {
       label: "Official repository",
       url: githubUrl,
-      noteZh: "官方代码仓库。",
+      noteZh: "Official code repository.",
       noteEn: "Official code repository."
     }
   ];
@@ -1285,6 +2340,147 @@ function validateEvidence(evidence) {
       }
     }
   }
+}
+
+function ensureEvidenceSourceIds(sources, claimType) {
+  return ensureArray(sources).map((source, index) => {
+    if (source && typeof source === "object") {
+      const normalizedSource = source.source || source.path || source.url || `source_${index}`;
+      const category = source.category || source.priority_class || evidencePriorityLabel(normalizedSource);
+      return {
+        evidence_id: source.evidence_id || stableEvidenceId(`${claimType}.${index}`, normalizedSource),
+        source: normalizedSource,
+        path: source.path,
+        url: source.url,
+        source_type: source.source_type || inferEvidenceSourceType(normalizedSource, category),
+        category,
+        priority_class: category,
+        claim_type: source.claim_type || claimType,
+        location: source.location,
+        snippet: source.snippet
+      };
+    }
+    const normalizedSource = String(source || `source_${index}`);
+    const category = evidencePriorityLabel(normalizedSource);
+    return {
+      evidence_id: stableEvidenceId(`${claimType}.${index}`, normalizedSource),
+      source: normalizedSource,
+      source_type: inferEvidenceSourceType(normalizedSource, category),
+      category,
+      priority_class: category,
+      claim_type: claimType
+    };
+  });
+}
+
+function normalizeEnglishFields(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizeEnglishFields(item));
+  }
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+
+  const normalized = {};
+  for (const [key, item] of Object.entries(value)) {
+    normalized[key] = normalizeEnglishFields(item);
+  }
+
+  const mirrorPairs = [
+    ["zh", "en"],
+    ["titleZh", "titleEn"],
+    ["detailsZh", "detailsEn"],
+    ["noteZh", "noteEn"],
+    ["conditionZh", "conditionEn"],
+    ["recoveryZh", "recoveryEn"],
+    ["passZh", "passEn"],
+    ["warnZh", "warnEn"],
+    ["failZh", "failEn"]
+  ];
+  for (const [target, source] of mirrorPairs) {
+    if (Object.prototype.hasOwnProperty.call(normalized, source)) {
+      normalized[target] = normalized[source];
+    }
+  }
+  return normalized;
+}
+
+function annotateClaimEvidence(spec) {
+  const classification = spec.algorithmClassification?.classification || {};
+  const implementation = spec.algorithmClassification?.implementation || {};
+  classification.evidence_sources = ensureEvidenceSourceIds(classification.evidence || [], "classification");
+  classification.evidence_id = stableEvidenceId("classification.primary_task", classification.primary_task || spec.skillName);
+  implementation.evidence_sources = ensureEvidenceSourceIds(implementation.evidence || [], "implementation");
+  implementation.evidence_id = stableEvidenceId("implementation.languages", (implementation.languages || []).join("-"));
+
+  for (const [facetName, facet] of Object.entries(classification.perturbation || {})) {
+    facet.evidence_id = stableEvidenceId(`perturbation.${facetName}`, facet.value);
+    facet.evidence_sources = ensureEvidenceSourceIds(facet.evidence || [], `perturbation.${facetName}`);
+  }
+
+  const parameterGroups = ["user_required", "auto_detected", "literature_defaults", "wrapper_defaults"];
+  for (const group of parameterGroups) {
+    spec.parameterPolicy[group] = ensureArray(spec.parameterPolicy[group]).map((item) => ({
+      ...item,
+      evidence_id: item.evidence_id || stableEvidenceId(`parameter.${item.name}`, item.name),
+      evidence_sources: ensureEvidenceSourceIds(item.evidence_sources || item.sources || [group], `parameter.${item.name}`)
+    }));
+  }
+
+  spec.executionContract.workflow_steps = ensureArray(spec.executionContract.workflow_steps).map((step) => ({
+    ...step,
+    evidence_id: step.evidence_id || stableEvidenceId(`workflow_step.${step.id || step.name}`, step.id || step.name),
+    evidence_sources: ensureEvidenceSourceIds(step.evidence_sources || step.evidence || [], `workflow_step.${step.id || step.name}`)
+  }));
+  spec.executionContract.dag_edges = ensureArray(spec.executionContract.dag_edges).map((edge) => ({
+    ...edge,
+    evidence_id: edge.evidence_id || stableEvidenceId(`dag_edge.${edge.source}->${edge.target}`, `${edge.source}->${edge.target}`),
+    evidence_sources: ensureEvidenceSourceIds(edge.evidence_sources || edge.evidence || [], `dag_edge.${edge.source}->${edge.target}`)
+  }));
+
+  spec.evidenceSchema = {
+    version: "1.0",
+    required_fields: ["evidence_id", "source", "source_type", "priority_class", "claim_type"],
+    claim_types: ["classification", "perturbation", "parameter", "workflow_step", "dag_edge", "runtime_adapter"]
+  };
+  return spec;
+}
+
+function validateContractSpec(spec) {
+  const requiredPaths = [
+    ["skillName", spec.skillName],
+    ["algorithmClassification.classification.primary_task", spec.algorithmClassification?.classification?.primary_task],
+    ["algorithmClassification.implementation.execution_modes", spec.algorithmClassification?.implementation?.execution_modes],
+    ["parameterPolicy.evidence_priority", spec.parameterPolicy?.evidence_priority],
+    ["executionContract.workflow_steps", spec.executionContract?.workflow_steps],
+    ["executionContract.dag_edges", spec.executionContract?.dag_edges],
+    ["executionContract.runtime_adapters", spec.executionContract?.runtime_adapters],
+    ["qcContract.rules", spec.qcContract?.rules],
+    ["outputBundle.required_paths", spec.outputBundle?.required_paths]
+  ];
+  for (const [label, value] of requiredPaths) {
+    if (value === undefined || value === null || (Array.isArray(value) && value.length === 0)) {
+      fail(`Generated contract is missing required schema path: ${label}`);
+    }
+  }
+  const missingIds = [
+    ...ensureArray(spec.parameterPolicy.user_required),
+    ...ensureArray(spec.parameterPolicy.auto_detected),
+    ...ensureArray(spec.parameterPolicy.literature_defaults),
+    ...ensureArray(spec.parameterPolicy.wrapper_defaults),
+    ...ensureArray(spec.executionContract.workflow_steps),
+    ...ensureArray(spec.executionContract.dag_edges)
+  ].filter((item) => !item.evidence_id);
+  if (missingIds.length > 0) {
+    fail("Generated contract has traceable claims without evidence_id.");
+  }
+}
+
+function finalizeSpec(rawSpec) {
+  const spec = annotateClaimEvidence(normalizeEnglishFields(rawSpec));
+  spec.schema_version = "paper2omics.contract.v1";
+  validateContractSpec(spec);
+  return spec;
 }
 
 async function readJson(filePath) {
@@ -1397,13 +2593,23 @@ function buildSpec(args, repoEvidence, paperEvidence) {
   const exampleGene = inferExampleGene(repoEvidence);
   const hasExamples = ensureArray(repoEvidence.selections?.examples).length > 0;
   const inputContract = inferInputContract(domain, analysisType, exampleGene);
+  const algorithmClassification = inferAlgorithmClassification(
+    domain,
+    analysisType,
+    runtime,
+    primaryTool,
+    githubUrl,
+    text,
+    args["preferred-language"]
+  );
 
-  return {
+  const rawSpec = {
     skillName,
     displayName,
     paperTitle,
     paperUrl,
     githubUrl,
+    algorithmClassification,
     metadata: {
       version: args.version || "0.3.0",
       author: args.author || "OpenAI Codex",
@@ -1424,8 +2630,8 @@ function buildSpec(args, repoEvidence, paperEvidence) {
       file_fields: inputContract.file_fields,
       state_requirements: inputContract.state_requirements
     },
-    parameterPolicy: inferParameterPolicy(domain, analysisType, runtime, text),
-    executionContract: inferExecutionContract(repoEvidence, domain, analysisType, runtime, primaryTool),
+    parameterPolicy: inferParameterPolicy(domain, analysisType, runtime, text, repoEvidence),
+    executionContract: inferExecutionContract(repoEvidence, domain, analysisType, runtime, primaryTool, algorithmClassification),
     qcContract: inferQcContract(domain, analysisType, runtime),
     outputBundle: inferOutputBundle(),
     reproducibilityContract: inferReproducibilityContract(),
@@ -1434,14 +2640,15 @@ function buildSpec(args, repoEvidence, paperEvidence) {
       demo_input_manifest: inputContract.demo_input_manifest,
       demo_files: inputContract.demo_files,
       smoke_scenarios: [
-        pair("dry-run 生成完整 bundle。", "The dry-run generates the full bundle."),
-        pair("缺失 report.md 时 validate-output 返回失败。", "validate-output fails when report.md is missing.")
+        pair("The dry-run generates the full bundle.", "The dry-run generates the full bundle."),
+        pair("validate-output fails when report.md is missing.", "validate-output fails when report.md is missing.")
       ]
     },
     references: inferReferences(repoEvidence, paperEvidence),
     failureModes: inferFailureModes(domain, analysisType, runtime),
     citations: inferCitations(paperTitle, paperUrl, githubUrl, paperEvidence)
   };
+  return finalizeSpec(rawSpec);
 }
 
 async function writeJson(filePath, payload) {

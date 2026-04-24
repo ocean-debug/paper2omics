@@ -1,4 +1,4 @@
-# QC Rubrics / 质控判定模板
+﻿# QC Rubrics
 
 Use this file to convert method notes into explicit QC rules.
 

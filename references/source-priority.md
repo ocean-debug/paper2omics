@@ -1,22 +1,23 @@
-# Source Priority / 证据优先级
+# Source Priority
 
-Use this file when paper text, README text, and code do not fully agree.
+Use this file when paper text, README text, examples, and code do not fully agree.
 
-## Priority Rules / 优先级规则
+## Priority Rules
 
 Choose the evidence source based on the claim you are making.
 
-### Method intent / 方法意图
+### Method Intent
 
 Use this priority:
 
-1. Paper full text
-2. Paper abstract or official article page
-3. Main implementation files
-4. Official manuscript, vignette, tutorial, or example scripts
-5. README and package description files
+1. Running example, notebook, or demo script
+2. Official docs, tutorial, or vignette
+3. Main source code or public API
+4. README and package description files
+5. Paper Methods
+6. Paper abstract or official article summary
 
-### Runtime and environment / 运行环境与依赖
+### Runtime And Environment
 
 Use this priority:
 
@@ -24,7 +25,15 @@ Use this priority:
 2. Installation instructions in the README
 3. Import statements in example or manuscript scripts
 
-### Reproduction details / 复现细节
+Keep languages, execution modes, and workflow engines separate:
+
+- Languages: Python, R, MATLAB, JavaScript, shell, and other implementation languages.
+- Execution modes: `python_api`, `r_api`, `cli`, `notebook`, or `wrapper_only`.
+- Workflow engines: `snakemake`, `nextflow`, `cwl`, or other workflow runners.
+
+Do not classify Snakemake, Nextflow, or CWL as programming languages.
+
+### Reproduction Details
 
 Use this priority:
 
@@ -33,24 +42,25 @@ Use this priority:
 3. README walkthroughs
 4. Inference from the main code
 
-## Conflict Handling / 冲突处理
+## Conflict Handling
 
 When sources disagree:
 
 - State both claims if the conflict matters to execution.
 - Prefer the higher-priority source for the final recommendation.
-- Add a bilingual uncertainty note:
-  - `未在源码/论文中确认 / Not confirmed in paper or code`
-  - `论文与实现存在差异 / The paper and implementation differ`
-  - `README 提供的是简化示例 / The README provides a simplified example`
+- Add an English uncertainty note:
+  - `Not confirmed in paper or code`
+  - `The paper and implementation differ`
+  - `The README provides a simplified example`
 
-## Evidence Map Style / 证据映射写法
+## Evidence Map Style
 
 For each important workflow step, record:
 
 - what the step does
 - where it is supported
 - whether it belongs to the core method or a reproduction branch
+- which DAG edge inference rule was used when the step depends on another step
 
 Use labels like these:
 
@@ -61,8 +71,14 @@ Use labels like these:
 - `example`
 - `readme`
 - `dependency-file`
+- `notebook-script-execution-order`
+- `variable-flow`
+- `file-flow`
+- `function-call-graph`
+- `semantic-dependency`
+- `manual-fallback-rule`
 
-## Missing Information / 缺失信息处理
+## Missing Information
 
 If the paper or repository does not expose enough detail:
 
@@ -70,7 +86,7 @@ If the paper or repository does not expose enough detail:
 - Say exactly which detail is missing.
 - Suggest the next best official artifact to inspect, such as a manuscript script, vignette, or issue thread.
 
-## Separation Rule / 分层规则
+## Separation Rule
 
 Keep these layers separate in the final summary and child skill:
 

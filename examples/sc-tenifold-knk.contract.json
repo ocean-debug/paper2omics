@@ -4,6 +4,218 @@
   "paperTitle": "scTenifoldKnk: An efficient virtual knockout tool for gene function predictions via single-cell gene regulatory network perturbation",
   "paperUrl": "https://doi.org/10.1016/j.patter.2022.100434",
   "githubUrl": "https://github.com/cailab-tamu/scTenifoldKnk",
+  "algorithmClassification": {
+    "algorithm": {
+      "name": "scTenifoldKnk",
+      "repository": "https://github.com/cailab-tamu/scTenifoldKnk"
+    },
+    "classification": {
+      "primary_modality": "single_cell_transcriptomics",
+      "secondary_modalities": [],
+      "task_family": [
+        "regulatory_network",
+        "perturbation"
+      ],
+      "primary_task": "perturbation_analysis",
+      "secondary_tasks": [
+        "virtual_gene_knockout",
+        "gene_function_prediction",
+        "perturbed_gene_ranking"
+      ],
+      "perturbation": {
+        "target_type": {
+          "value": "gene",
+          "evidence": [
+            "target gene",
+            "gKO"
+          ],
+          "evidence_id": "ev_perturbation-target-type_gene",
+          "evidence_sources": [
+            {
+              "evidence_id": "ev_perturbation-target-type-0_target-gene",
+              "source": "target gene",
+              "source_type": "source_code",
+              "category": "source_code_api",
+              "priority_class": "source_code_api",
+              "claim_type": "perturbation.target_type"
+            },
+            {
+              "evidence_id": "ev_perturbation-target-type-1_gko",
+              "source": "gKO",
+              "source_type": "source_code",
+              "category": "source_code_api",
+              "priority_class": "source_code_api",
+              "claim_type": "perturbation.target_type"
+            }
+          ]
+        },
+        "action": {
+          "value": "virtual_knockout",
+          "evidence": [
+            "virtual knockout",
+            "in-silico knockout",
+            "knocks out a target gene"
+          ],
+          "evidence_id": "ev_perturbation-action_virtual-knockout",
+          "evidence_sources": [
+            {
+              "evidence_id": "ev_perturbation-action-0_virtual-knockout",
+              "source": "virtual knockout",
+              "source_type": "source_code",
+              "category": "source_code_api",
+              "priority_class": "source_code_api",
+              "claim_type": "perturbation.action"
+            },
+            {
+              "evidence_id": "ev_perturbation-action-1_in-silico-knockout",
+              "source": "in-silico knockout",
+              "source_type": "source_code",
+              "category": "source_code_api",
+              "priority_class": "source_code_api",
+              "claim_type": "perturbation.action"
+            },
+            {
+              "evidence_id": "ev_perturbation-action-2_knocks-out-a-target-gene",
+              "source": "knocks out a target gene",
+              "source_type": "source_code",
+              "category": "source_code_api",
+              "priority_class": "source_code_api",
+              "claim_type": "perturbation.action"
+            }
+          ]
+        },
+        "modeling_mechanism": {
+          "value": "scGRN_edge_removal_and_manifold_alignment",
+          "evidence": [
+            "scGRN",
+            "outdegree edges"
+          ],
+          "evidence_id": "ev_perturbation-modeling-mechanism_scgrn-edge-removal-and-manifold-alignment",
+          "evidence_sources": [
+            {
+              "evidence_id": "ev_perturbation-modeling-mechanism-0_scgrn",
+              "source": "scGRN",
+              "source_type": "source_code",
+              "category": "source_code_api",
+              "priority_class": "source_code_api",
+              "claim_type": "perturbation.modeling_mechanism"
+            },
+            {
+              "evidence_id": "ev_perturbation-modeling-mechanism-1_outdegree-edges",
+              "source": "outdegree edges",
+              "source_type": "source_code",
+              "category": "source_code_api",
+              "priority_class": "source_code_api",
+              "claim_type": "perturbation.modeling_mechanism"
+            }
+          ]
+        },
+        "output_interpretation": {
+          "value": "differential_regulation_and_gene_function_prediction",
+          "evidence": [
+            "gene function"
+          ],
+          "evidence_id": "ev_perturbation-output-interpretation_differential-regulation-and-gene-function-prediction",
+          "evidence_sources": [
+            {
+              "evidence_id": "ev_perturbation-output-interpretation-0_gene-function",
+              "source": "gene function",
+              "source_type": "source_code",
+              "category": "source_code_api",
+              "priority_class": "source_code_api",
+              "claim_type": "perturbation.output_interpretation"
+            }
+          ]
+        }
+      },
+      "confidence": 0.85,
+      "evidence": [
+        "paper_evidence",
+        "repository_evidence"
+      ],
+      "evidence_sources": [
+        {
+          "evidence_id": "ev_classification-0_paper-evidence",
+          "source": "paper_evidence",
+          "source_type": "paper",
+          "category": "source_code_api",
+          "priority_class": "source_code_api",
+          "claim_type": "classification"
+        },
+        {
+          "evidence_id": "ev_classification-1_repository-evidence",
+          "source": "repository_evidence",
+          "source_type": "source_code",
+          "category": "source_code_api",
+          "priority_class": "source_code_api",
+          "claim_type": "classification"
+        }
+      ],
+      "evidence_id": "ev_classification-primary-task_perturbation-analysis"
+    },
+    "implementation": {
+      "languages": [
+        "python",
+        "r",
+        "matlab"
+      ],
+      "main_language": "r",
+      "available_languages": [
+        "python",
+        "r",
+        "matlab"
+      ],
+      "preferred_language": "python",
+      "fallback_language": "r",
+      "package_type": "multi_language_package",
+      "execution_modes": [
+        "r_api"
+      ],
+      "workflow_engines": [],
+      "confidence": 0.8,
+      "evidence": [
+        "dependency_files",
+        "entrypoints",
+        "readme"
+      ],
+      "evidence_sources": [
+        {
+          "evidence_id": "ev_implementation-0_dependency-files",
+          "source": "dependency_files",
+          "source_type": "source_code",
+          "category": "source_code_api",
+          "priority_class": "source_code_api",
+          "claim_type": "implementation"
+        },
+        {
+          "evidence_id": "ev_implementation-1_entrypoints",
+          "source": "entrypoints",
+          "source_type": "source_code",
+          "category": "source_code_api",
+          "priority_class": "source_code_api",
+          "claim_type": "implementation"
+        },
+        {
+          "evidence_id": "ev_implementation-2_readme",
+          "source": "readme",
+          "source_type": "readme",
+          "category": "readme",
+          "priority_class": "readme",
+          "claim_type": "implementation"
+        }
+      ],
+      "evidence_id": "ev_implementation-languages_python-r-matlab"
+    },
+    "required_inputs": [
+      "wt_expression_matrix",
+      "knockout_gene"
+    ],
+    "optional_inputs": [
+      "cell_metadata",
+      "gene_filtering_params",
+      "enrichment_database"
+    ]
+  },
   "metadata": {
     "version": "0.3.0",
     "author": "OpenAI Codex",
@@ -56,36 +268,36 @@
   },
   "routing": {
     "why_this_exists": {
-      "zh": "这个 skill 把 scTenifoldKnk 的论文和官方仓库整理成可路由、可校验、可报告的执行合同，用于在 WT 单细胞表达矩阵上执行虚拟敲除分析。",
+      "zh": "This skill turns scTenifoldKnk into a routable, validated, and report-producing execution contract for virtual knockout on WT single-cell expression matrices.",
       "en": "This skill turns scTenifoldKnk into a routable, validated, and report-producing execution contract for virtual knockout on WT single-cell expression matrices."
     },
     "when_to_use": [
       {
-        "zh": "当任务是从 WT scRNA-seq 矩阵出发，对候选基因执行虚拟敲除并输出扰动或差异调控结果时使用。",
+        "zh": "Use when the task starts from a WT scRNA-seq matrix and needs virtual knockout plus perturbation or differential-regulation outputs.",
         "en": "Use when the task starts from a WT scRNA-seq matrix and needs virtual knockout plus perturbation or differential-regulation outputs."
       },
       {
-        "zh": "当需要区分核心 WT-only 工作流与仓库里的 manuscript 复现实例时使用。",
+        "zh": "Use when the user needs the core WT-only workflow clearly separated from manuscript-style reproduction branches.",
         "en": "Use when the user needs the core WT-only workflow clearly separated from manuscript-style reproduction branches."
       }
     ],
     "when_not_to_use": [
       {
-        "zh": "不要用于真实 CRISPR KO 实验设计、通用差异表达分析或多样本整合。",
+        "zh": "Do not use for real CRISPR KO experimental design, generic differential expression, or multi-sample integration.",
         "en": "Do not use for real CRISPR KO experimental design, generic differential expression, or multi-sample integration."
       },
       {
-        "zh": "不要在没有 WT 输入矩阵的情况下使用。",
+        "zh": "Do not use when no WT input matrix is available.",
         "en": "Do not use when no WT input matrix is available."
       }
     ],
     "route_elsewhere": [
       {
-        "zh": "如果任务还是 FASTQ 到表达矩阵的上游处理，路由到比对或定量 skill。",
+        "zh": "If the task is still upstream FASTQ-to-matrix processing, route to an alignment or quantification skill.",
         "en": "If the task is still upstream FASTQ-to-matrix processing, route to an alignment or quantification skill."
       },
       {
-        "zh": "如果任务是 bulk RNA-seq 差异表达，路由到 bulk differential-expression skill。",
+        "zh": "If the task is bulk RNA-seq differential expression, route to a bulk differential-expression skill.",
         "en": "If the task is bulk RNA-seq differential expression, route to a bulk differential-expression skill."
       }
     ]
@@ -94,12 +306,12 @@
     "formats": [
       {
         "name": "input_manifest.json",
-        "zh": "推荐输入是 JSON manifest，用来声明矩阵路径和对象状态。",
+        "zh": "The preferred input is a JSON manifest that declares matrix paths and object state.",
         "en": "The preferred input is a JSON manifest that declares matrix paths and object state."
       },
       {
         "name": "matrix_market_or_csv",
-        "zh": "表达矩阵可以是 Matrix Market 或 CSV，但 manifest 必须声明方向和是否为原始计数。",
+        "zh": "Expression matrices may be Matrix Market or CSV, but the manifest must state orientation and whether they are raw counts.",
         "en": "Expression matrices may be Matrix Market or CSV, but the manifest must state orientation and whether they are raw counts."
       }
     ],
@@ -114,7 +326,7 @@
       {
         "path": "inputs.wt_matrix.path",
         "required": true,
-        "zh": "WT 表达矩阵路径必须存在。",
+        "zh": "The WT expression matrix path must exist.",
         "en": "The WT expression matrix path must exist."
       }
     ],
@@ -123,7 +335,7 @@
         "path": "inputs.wt_matrix.orientation",
         "required": true,
         "equals": "genes_by_cells",
-        "zh": "WT 矩阵必须是基因在行、细胞在列。",
+        "zh": "The WT matrix must be organized as genes in rows and cells in columns.",
         "en": "The WT matrix must be organized as genes in rows and cells in columns."
       },
       {
@@ -133,14 +345,14 @@
           "raw_counts",
           "unnormalized_counts"
         ],
-        "zh": "核心输入应为原始或未标准化计数，以免静默跳过方法要求的前置质量控制。",
+        "zh": "Core input should remain raw or otherwise unnormalized so method-level preflight assumptions are not silently bypassed.",
         "en": "Core input should remain raw or otherwise unnormalized so method-level preflight assumptions are not silently bypassed."
       },
       {
         "path": "inputs.wt_matrix.has_gene_names",
         "required": true,
         "equals": true,
-        "zh": "矩阵必须保留基因名，否则无法验证待敲除基因是否存在。",
+        "zh": "The matrix must retain gene names so the wrapper can verify that the knockout gene exists.",
         "en": "The matrix must retain gene names so the wrapper can verify that the knockout gene exists."
       },
       {
@@ -150,19 +362,28 @@
           "core_wt_only",
           "paper_reproduction"
         ],
-        "zh": "必须显式声明是核心 WT-only 路径还是论文复现路径。",
+        "zh": "The manifest must explicitly declare whether this is the core WT-only path or the paper-reproduction path.",
         "en": "The manifest must explicitly declare whether this is the core WT-only path or the paper-reproduction path."
       }
     ]
   },
   "parameterPolicy": {
+    "evidence_priority": [
+      "running_example_notebook_demo_script",
+      "function_signature",
+      "official_docs_tutorial",
+      "source_code_api",
+      "readme",
+      "paper_methods",
+      "paper_abstract"
+    ],
     "required_user_decisions": [
       {
-        "zh": "必须提供待敲除的基因符号，并确认该基因在过滤后仍保留。",
+        "zh": "The knockout gene must be provided and confirmed to remain present after filtering.",
         "en": "The knockout gene must be provided and confirmed to remain present after filtering."
       },
       {
-        "zh": "必须确认本次运行是核心 WT-only 分析还是论文复现分支。",
+        "zh": "The user must confirm whether the run targets the core WT-only analysis or a paper-reproduction branch.",
         "en": "The user must confirm whether the run targets the core WT-only analysis or a paper-reproduction branch."
       }
     ],
@@ -170,7 +391,7 @@
       {
         "name": "knockout_gene",
         "description": {
-          "zh": "目标敲除基因。",
+          "zh": "Target knockout gene.",
           "en": "Target knockout gene."
         },
         "sources": [
@@ -178,14 +399,45 @@
           "manifest.inputs.knockout_gene"
         ],
         "rationale": {
-          "zh": "这决定哪个基因的出边会被置零，不能自动猜测。",
+          "zh": "This determines which gene loses its outgoing edges and must not be guessed.",
           "en": "This determines which gene loses its outgoing edges and must not be guessed."
-        }
+        },
+        "evidence_sources": [
+          {
+            "evidence_id": "ev_parameter-knockout-gene-0_r-dregulation-r",
+            "source": "R/dRegulation.R",
+            "url": "https://github.com/cailab-tamu/scTenifoldKnk/blob/master/R/dRegulation.R",
+            "source_type": "function_signature",
+            "category": "function_signature",
+            "priority_class": "function_signature",
+            "claim_type": "parameter.knockout_gene"
+          },
+          {
+            "evidence_id": "ev_parameter-knockout-gene-1_r-sctenifoldknk-r",
+            "source": "R/scTenifoldKnk.R",
+            "url": "https://github.com/cailab-tamu/scTenifoldKnk/blob/master/R/scTenifoldKnk.R",
+            "source_type": "function_signature",
+            "category": "function_signature",
+            "priority_class": "function_signature",
+            "claim_type": "parameter.knockout_gene"
+          },
+          {
+            "evidence_id": "ev_parameter-knockout-gene-2_readme-md",
+            "source": "README.md",
+            "url": "https://github.com/cailab-tamu/scTenifoldKnk/blob/master/README.md",
+            "source_type": "readme",
+            "category": "readme",
+            "priority_class": "readme",
+            "claim_type": "parameter.knockout_gene"
+          }
+        ],
+        "evidence_priority_class": "function_signature",
+        "evidence_id": "ev_parameter-knockout-gene_knockout-gene"
       },
       {
         "name": "analysis_mode",
         "description": {
-          "zh": "核心路径还是论文复现分支。",
+          "zh": "Core path versus paper-reproduction branch.",
           "en": "Core path versus paper-reproduction branch."
         },
         "sources": [
@@ -193,16 +445,36 @@
           "manifest.inputs.analysis_mode"
         ],
         "rationale": {
-          "zh": "它决定是否允许 manuscript 里的真实 WT/KO 对照分支进入执行计划。",
+          "zh": "It determines whether real WT/KO manuscript branches may enter the execution plan.",
           "en": "It determines whether real WT/KO manuscript branches may enter the execution plan."
-        }
+        },
+        "evidence_sources": [
+          {
+            "evidence_id": "ev_parameter-analysis-mode-0_config-analysis-analysis-mode",
+            "source": "config.analysis.analysis_mode",
+            "source_type": "manual_fallback",
+            "category": "manual_fallback_rule",
+            "priority_class": "manual_fallback_rule",
+            "claim_type": "parameter.analysis_mode"
+          },
+          {
+            "evidence_id": "ev_parameter-analysis-mode-1_manifest-inputs-analysis-mode",
+            "source": "manifest.inputs.analysis_mode",
+            "source_type": "manual_fallback",
+            "category": "manual_fallback_rule",
+            "priority_class": "manual_fallback_rule",
+            "claim_type": "parameter.analysis_mode"
+          }
+        ],
+        "evidence_priority_class": "manual_fallback_rule",
+        "evidence_id": "ev_parameter-analysis-mode_analysis-mode"
       }
     ],
     "auto_detected": [
       {
         "name": "r_runtime_available",
         "description": {
-          "zh": "Rscript 是否可用。",
+          "zh": "Whether Rscript is available.",
           "en": "Whether Rscript is available."
         },
         "sources": [
@@ -210,14 +482,36 @@
         ],
         "fallback_value": false,
         "rationale": {
-          "zh": "native execution 依赖 Rscript。",
+          "zh": "Native execution depends on Rscript.",
           "en": "Native execution depends on Rscript."
-        }
+        },
+        "evidence_sources": [
+          {
+            "evidence_id": "ev_parameter-r-runtime-available-0_description",
+            "source": "DESCRIPTION",
+            "url": "https://github.com/cailab-tamu/scTenifoldKnk/blob/master/DESCRIPTION",
+            "source_type": "source_code",
+            "category": "source_code_api",
+            "priority_class": "source_code_api",
+            "claim_type": "parameter.r_runtime_available"
+          },
+          {
+            "evidence_id": "ev_parameter-r-runtime-available-1_namespace",
+            "source": "NAMESPACE",
+            "url": "https://github.com/cailab-tamu/scTenifoldKnk/blob/master/NAMESPACE",
+            "source_type": "source_code",
+            "category": "source_code_api",
+            "priority_class": "source_code_api",
+            "claim_type": "parameter.r_runtime_available"
+          }
+        ],
+        "evidence_priority_class": "source_code_api",
+        "evidence_id": "ev_parameter-r-runtime-available_r-runtime-available"
       },
       {
         "name": "wt_input_normalization",
         "description": {
-          "zh": "从 manifest 读取 WT 输入矩阵状态。",
+          "zh": "Read the WT input matrix state from the manifest.",
           "en": "Read the WT input matrix state from the manifest."
         },
         "sources": [
@@ -225,27 +519,72 @@
         ],
         "fallback_value": "unknown",
         "rationale": {
-          "zh": "wrapper 不能静默假设输入已经标准化或未标准化。",
+          "zh": "The wrapper must not silently assume whether the input is normalized.",
           "en": "The wrapper must not silently assume whether the input is normalized."
-        }
+        },
+        "evidence_sources": [
+          {
+            "evidence_id": "ev_parameter-wt-input-normalization-0_r-sctenifoldknk-r",
+            "source": "R/scTenifoldKnk.R",
+            "url": "https://github.com/cailab-tamu/scTenifoldKnk/blob/master/R/scTenifoldKnk.R",
+            "source_type": "function_signature",
+            "category": "function_signature",
+            "priority_class": "function_signature",
+            "claim_type": "parameter.wt_input_normalization"
+          }
+        ],
+        "evidence_priority_class": "function_signature",
+        "evidence_id": "ev_parameter-wt-input-normalization_wt-input-normalization"
       }
     ],
     "literature_defaults": [
       {
         "name": "edge_weight_quantile",
         "value": "0.95",
+        "sources": [
+          "source_code_api"
+        ],
         "rationale": {
-          "zh": "源码中用 quantile(abs(X), 0.95) 过滤低权重边。",
+          "zh": "The source code uses quantile(abs(X), 0.95) to filter low-weight edges.",
           "en": "The source code uses quantile(abs(X), 0.95) to filter low-weight edges."
-        }
+        },
+        "evidence_sources": [
+          {
+            "evidence_id": "ev_parameter-edge-weight-quantile-0_r-qfilter-r",
+            "source": "R/qFilter.R",
+            "url": "https://github.com/cailab-tamu/scTenifoldKnk/blob/master/R/qFilter.R",
+            "source_type": "function_signature",
+            "category": "function_signature",
+            "priority_class": "function_signature",
+            "claim_type": "parameter.edge_weight_quantile"
+          }
+        ],
+        "evidence_priority_class": "function_signature",
+        "evidence_id": "ev_parameter-edge-weight-quantile_edge-weight-quantile"
       },
       {
         "name": "direction_lambda",
         "value": "1",
+        "sources": [
+          "function_signature"
+        ],
         "rationale": {
-          "zh": "源码中的方向约束函数默认使用 lambda = 1。",
+          "zh": "The directionality helper defaults to lambda = 1 in the source code.",
           "en": "The directionality helper defaults to lambda = 1 in the source code."
-        }
+        },
+        "evidence_sources": [
+          {
+            "evidence_id": "ev_parameter-direction-lambda-0_r-strictdirection-r",
+            "source": "R/strictDirection.R",
+            "url": "https://github.com/cailab-tamu/scTenifoldKnk/blob/master/R/strictDirection.R",
+            "source_type": "function_signature",
+            "category": "function_signature",
+            "priority_class": "function_signature",
+            "claim_type": "parameter.direction_lambda"
+          }
+        ],
+        "evidence_priority_class": "function_signature",
+        "evidence_id": "ev_parameter-direction-lambda_direction-lambda"
       }
     ],
     "wrapper_defaults": [
@@ -253,30 +592,54 @@
         "name": "result_bundle_version",
         "value": "1.0",
         "rationale": {
-          "zh": "统一结果目录结构，便于 smoke test、报告重建和复现记录。",
+          "zh": "A fixed result bundle keeps smoke tests, report regeneration, and reproducibility records consistent.",
           "en": "A fixed result bundle keeps smoke tests, report regeneration, and reproducibility records consistent."
-        }
+        },
+        "evidence_sources": [
+          {
+            "evidence_id": "ev_parameter-result-bundle-version-0_paper2omics-wrapper-contract",
+            "source": "paper2omics wrapper contract",
+            "source_type": "paper",
+            "category": "manual_fallback_rule",
+            "priority_class": "manual_fallback_rule",
+            "claim_type": "parameter.result_bundle_version"
+          }
+        ],
+        "evidence_priority_class": "manual_fallback_rule",
+        "evidence_id": "ev_parameter-result-bundle-version_result-bundle-version"
       },
       {
         "name": "dry_run_mode",
         "value": "true",
         "rationale": {
-          "zh": "默认先验证合同与运行时，再决定是否真正消耗集群资源。",
+          "zh": "Default to validating the contract and runtime before executing the full analysis.",
           "en": "Default to validating the contract and runtime before executing the full analysis."
-        }
+        },
+        "evidence_sources": [
+          {
+            "evidence_id": "ev_parameter-dry-run-mode-0_paper2omics-wrapper-contract",
+            "source": "paper2omics wrapper contract",
+            "source_type": "paper",
+            "category": "manual_fallback_rule",
+            "priority_class": "manual_fallback_rule",
+            "claim_type": "parameter.dry_run_mode"
+          }
+        ],
+        "evidence_priority_class": "manual_fallback_rule",
+        "evidence_id": "ev_parameter-dry-run-mode_dry-run-mode"
       }
     ],
     "decision_rules": [
       {
-        "titleZh": "优先走核心 WT-only 路径",
+        "titleZh": "Prefer the core WT-only path",
         "titleEn": "Prefer the core WT-only path",
-        "detailsZh": "如果只有 WT 输入，就只生成虚拟敲除核心路径，不把 manuscript 复现脚本并入最小执行合同。",
+        "detailsZh": "If only WT input is available, keep the workflow on the virtual-knockout core path and do not merge manuscript reproduction scripts into the minimum contract.",
         "detailsEn": "If only WT input is available, keep the workflow on the virtual-knockout core path and do not merge manuscript reproduction scripts into the minimum contract."
       },
       {
-        "titleZh": "运行时缺失时阻断 native execution",
+        "titleZh": "Block native execution when a required runtime is missing",
         "titleEn": "Block native execution when a required runtime is missing",
-        "detailsZh": "如果 Rscript 不可用，返回结构化 blocked 状态，而不是假装方法已经执行成功。",
+        "detailsZh": "If Rscript is unavailable, emit a structured blocked status instead of pretending the method already ran.",
         "detailsEn": "If Rscript is unavailable, emit a structured blocked status instead of pretending the method already ran."
       }
     ]
@@ -287,64 +650,1083 @@
         "name": "python",
         "executable": "python",
         "required": true,
-        "zh": "Python orchestrator 运行时。",
+        "zh": "Python orchestrator runtime.",
         "en": "Python orchestrator runtime."
       },
       {
         "name": "Rscript",
         "executable": "Rscript",
         "required": true,
-        "zh": "scTenifoldKnk native execution 运行时。",
+        "zh": "scTenifoldKnk native execution runtime.",
         "en": "scTenifoldKnk native execution runtime."
       }
     ],
+    "runtime_adapters": [
+      {
+        "adapter_id": "rscript",
+        "runtime": "r",
+        "mode": "r_api",
+        "status": "candidate",
+        "entrypoint_evidence": [
+          {
+            "evidence_id": "ev_runtime-adapter-r-api-0_r-dregulation-r",
+            "source": "R/dRegulation.R",
+            "source_type": "source_code",
+            "category": "source_code_api",
+            "priority_class": "source_code_api",
+            "claim_type": "runtime_adapter.r_api"
+          },
+          {
+            "evidence_id": "ev_runtime-adapter-r-api-1_r-plotko-r",
+            "source": "R/plotKO.R",
+            "source_type": "source_code",
+            "category": "source_code_api",
+            "priority_class": "source_code_api",
+            "claim_type": "runtime_adapter.r_api"
+          },
+          {
+            "evidence_id": "ev_runtime-adapter-r-api-2_r-qfilter-r",
+            "source": "R/qFilter.R",
+            "source_type": "source_code",
+            "category": "source_code_api",
+            "priority_class": "source_code_api",
+            "claim_type": "runtime_adapter.r_api"
+          },
+          {
+            "evidence_id": "ev_runtime-adapter-r-api-3_r-scqc-r",
+            "source": "R/scQC.R",
+            "source_type": "source_code",
+            "category": "source_code_api",
+            "priority_class": "source_code_api",
+            "claim_type": "runtime_adapter.r_api"
+          },
+          {
+            "evidence_id": "ev_runtime-adapter-r-api-4_r-sctenifoldknk-r",
+            "source": "R/scTenifoldKnk.R",
+            "source_type": "source_code",
+            "category": "source_code_api",
+            "priority_class": "source_code_api",
+            "claim_type": "runtime_adapter.r_api"
+          },
+          {
+            "evidence_id": "ev_runtime-adapter-r-api-5_r-strictdirection-r",
+            "source": "R/strictDirection.R",
+            "source_type": "source_code",
+            "category": "source_code_api",
+            "priority_class": "source_code_api",
+            "claim_type": "runtime_adapter.r_api"
+          }
+        ]
+      }
+    ],
+    "workflow_mining_priority": [
+      "running_example_notebook_demo_script",
+      "official_docs_tutorial",
+      "source_code_api",
+      "readme",
+      "paper_methods",
+      "paper_abstract"
+    ],
     "workflow_steps": [
       {
-        "titleZh": "路由并校验输入 manifest",
-        "titleEn": "Route and validate the input manifest",
-        "detailsZh": "先确认任务属于 WT-only virtual knockout，再检查矩阵方向、计数状态和 knockout gene 字段。",
-        "detailsEn": "First confirm that the task belongs to WT-only virtual knockout, then validate matrix orientation, count-state assumptions, and knockout-gene fields.",
+        "id": "00_validate_input",
+        "name": "00_validate_input",
+        "titleZh": "validate_input",
+        "titleEn": "validate_input",
+        "detailsZh": "Validate WT matrix path, matrix orientation, raw-count state, and knockout gene.",
+        "detailsEn": "Validate WT matrix path, matrix orientation, raw-count state, and knockout gene.",
+        "script": "scripts/00_validate_input.py",
+        "input": [
+          "config",
+          "wt_expression_matrix",
+          "knockout_gene"
+        ],
+        "output": [
+          "qc/input_validation.json"
+        ],
+        "parameters": [],
         "layer": "core",
         "evidence": [
-          "README.md",
-          "R/dRegulation.R",
-          "R/plotKO.R"
-        ]
+          "inst/manuscript/AHR/Code/Preenterocytes_DataPreProcessing.R",
+          "inst/manuscript/AHR/Code/Preenterocytes_DataProcessing.R",
+          "R/dRegulation.R"
+        ],
+        "evidence_sources": [
+          {
+            "evidence_id": "ev_source-0_inst-manuscript-ahr-code-preenterocytes-datapreprocessing-r",
+            "source": "inst/manuscript/AHR/Code/Preenterocytes_DataPreProcessing.R",
+            "source_type": "notebook",
+            "category": "running_example_notebook_demo_script",
+            "priority_class": "running_example_notebook_demo_script",
+            "claim_type": "source"
+          },
+          {
+            "evidence_id": "ev_source-1_inst-manuscript-ahr-code-preenterocytes-dataprocessing-r",
+            "source": "inst/manuscript/AHR/Code/Preenterocytes_DataProcessing.R",
+            "source_type": "notebook",
+            "category": "running_example_notebook_demo_script",
+            "priority_class": "running_example_notebook_demo_script",
+            "claim_type": "source"
+          },
+          {
+            "evidence_id": "ev_source-2_r-dregulation-r",
+            "source": "R/dRegulation.R",
+            "source_type": "source_code",
+            "category": "source_code_api",
+            "priority_class": "source_code_api",
+            "claim_type": "source"
+          }
+        ],
+        "evidence_priority_class": "running_example_notebook_demo_script",
+        "confidence": 0.85,
+        "evidence_id": "ev_workflow-step-00-validate-input_00-validate-input"
       },
       {
-        "titleZh": "规划核心 virtual knockout 路径",
-        "titleEn": "Plan the core virtual-knockout path",
-        "detailsZh": "按源码证据组织 QC、网络构建、方向约束、扰动模拟以及差异调控评分。",
-        "detailsEn": "Use the implementation evidence to organize QC, network construction, directionality constraints, perturbation simulation, and differential-regulation scoring.",
+        "id": "01_preprocess_expression_matrix",
+        "name": "01_preprocess_expression_matrix",
+        "titleZh": "preprocess_expression_matrix",
+        "titleEn": "preprocess_expression_matrix",
+        "detailsZh": "Filter genes and cells, confirm matrix orientation, and prepare the WT expression matrix.",
+        "detailsEn": "Filter genes and cells, confirm matrix orientation, and prepare the WT expression matrix.",
+        "script": "scripts/01_preprocess_expression_matrix.py",
+        "input": [
+          "wt_expression_matrix"
+        ],
+        "output": [
+          "prepared/wt_matrix.csv"
+        ],
+        "parameters": [],
         "layer": "core",
         "evidence": [
+          "inst/manuscript/AHR/Code/Preenterocytes_DataPreProcessing.R",
+          "inst/manuscript/AHR/Code/Preenterocytes_DataProcessing.R",
           "R/dRegulation.R",
           "R/plotKO.R",
           "R/qFilter.R",
           "R/scQC.R"
-        ]
+        ],
+        "evidence_sources": [
+          {
+            "evidence_id": "ev_source-0_inst-manuscript-ahr-code-preenterocytes-datapreprocessing-r",
+            "source": "inst/manuscript/AHR/Code/Preenterocytes_DataPreProcessing.R",
+            "source_type": "notebook",
+            "category": "running_example_notebook_demo_script",
+            "priority_class": "running_example_notebook_demo_script",
+            "claim_type": "source"
+          },
+          {
+            "evidence_id": "ev_source-1_inst-manuscript-ahr-code-preenterocytes-dataprocessing-r",
+            "source": "inst/manuscript/AHR/Code/Preenterocytes_DataProcessing.R",
+            "source_type": "notebook",
+            "category": "running_example_notebook_demo_script",
+            "priority_class": "running_example_notebook_demo_script",
+            "claim_type": "source"
+          },
+          {
+            "evidence_id": "ev_source-2_r-dregulation-r",
+            "source": "R/dRegulation.R",
+            "source_type": "source_code",
+            "category": "source_code_api",
+            "priority_class": "source_code_api",
+            "claim_type": "source"
+          },
+          {
+            "evidence_id": "ev_source-3_r-plotko-r",
+            "source": "R/plotKO.R",
+            "source_type": "source_code",
+            "category": "source_code_api",
+            "priority_class": "source_code_api",
+            "claim_type": "source"
+          },
+          {
+            "evidence_id": "ev_source-4_r-qfilter-r",
+            "source": "R/qFilter.R",
+            "source_type": "source_code",
+            "category": "source_code_api",
+            "priority_class": "source_code_api",
+            "claim_type": "source"
+          },
+          {
+            "evidence_id": "ev_source-5_r-scqc-r",
+            "source": "R/scQC.R",
+            "source_type": "source_code",
+            "category": "source_code_api",
+            "priority_class": "source_code_api",
+            "claim_type": "source"
+          }
+        ],
+        "evidence_priority_class": "running_example_notebook_demo_script",
+        "confidence": 0.85,
+        "evidence_id": "ev_workflow-step-01-preprocess-expression-matrix_01-preprocess-expression-matrix"
       },
       {
-        "titleZh": "显式隔离 manuscript 复现分支",
-        "titleEn": "Explicitly isolate manuscript reproduction branches",
-        "detailsZh": "只有在分析模式显式允许时，才把仓库中的 manuscript 或 example 分支纳入复现计划。",
-        "detailsEn": "Only allow manuscript or example branches into the plan when the analysis mode explicitly enables reproduction.",
-        "layer": "reproduction",
+        "id": "02_construct_wt_scgrn",
+        "name": "02_construct_wt_scgrn",
+        "titleZh": "construct_wt_scGRN",
+        "titleEn": "construct_wt_scGRN",
+        "detailsZh": "Construct the wild-type single-cell gene regulatory network.",
+        "detailsEn": "Construct the wild-type single-cell gene regulatory network.",
+        "script": "scripts/02_construct_wt_scgrn.py",
+        "input": [
+          "prepared/wt_matrix.csv"
+        ],
+        "output": [
+          "models/wt_scgrn.csv"
+        ],
+        "parameters": [],
+        "layer": "core",
         "evidence": [
           "inst/manuscript/AHR/Code/Preenterocytes_DataPreProcessing.R",
-          "inst/manuscript/AHR/Code/Preenterocytes_DataProcessing.R"
-        ]
+          "inst/manuscript/AHR/Code/Preenterocytes_DataProcessing.R",
+          "R/dRegulation.R",
+          "R/plotKO.R",
+          "R/qFilter.R",
+          "R/scQC.R"
+        ],
+        "evidence_sources": [
+          {
+            "evidence_id": "ev_source-0_inst-manuscript-ahr-code-preenterocytes-datapreprocessing-r",
+            "source": "inst/manuscript/AHR/Code/Preenterocytes_DataPreProcessing.R",
+            "source_type": "notebook",
+            "category": "running_example_notebook_demo_script",
+            "priority_class": "running_example_notebook_demo_script",
+            "claim_type": "source"
+          },
+          {
+            "evidence_id": "ev_source-1_inst-manuscript-ahr-code-preenterocytes-dataprocessing-r",
+            "source": "inst/manuscript/AHR/Code/Preenterocytes_DataProcessing.R",
+            "source_type": "notebook",
+            "category": "running_example_notebook_demo_script",
+            "priority_class": "running_example_notebook_demo_script",
+            "claim_type": "source"
+          },
+          {
+            "evidence_id": "ev_source-2_r-dregulation-r",
+            "source": "R/dRegulation.R",
+            "source_type": "source_code",
+            "category": "source_code_api",
+            "priority_class": "source_code_api",
+            "claim_type": "source"
+          },
+          {
+            "evidence_id": "ev_source-3_r-plotko-r",
+            "source": "R/plotKO.R",
+            "source_type": "source_code",
+            "category": "source_code_api",
+            "priority_class": "source_code_api",
+            "claim_type": "source"
+          },
+          {
+            "evidence_id": "ev_source-4_r-qfilter-r",
+            "source": "R/qFilter.R",
+            "source_type": "source_code",
+            "category": "source_code_api",
+            "priority_class": "source_code_api",
+            "claim_type": "source"
+          },
+          {
+            "evidence_id": "ev_source-5_r-scqc-r",
+            "source": "R/scQC.R",
+            "source_type": "source_code",
+            "category": "source_code_api",
+            "priority_class": "source_code_api",
+            "claim_type": "source"
+          }
+        ],
+        "evidence_priority_class": "running_example_notebook_demo_script",
+        "confidence": 0.85,
+        "evidence_id": "ev_workflow-step-02-construct-wt-scgrn_02-construct-wt-scgrn"
       },
       {
-        "titleZh": "生成结果合同与报告",
-        "titleEn": "Assemble the result contract and report",
-        "detailsZh": "无论是否 dry-run，都要输出标准 bundle、参数解析、运行时探测、QC 摘要和 caveats。",
-        "detailsEn": "Whether or not the run is a dry-run, emit the standard bundle, parameter resolution, runtime probe, QC summary, and caveats.",
+        "id": "03_simulate_gene_knockout",
+        "name": "03_simulate_gene_knockout",
+        "titleZh": "simulate_gene_knockout",
+        "titleEn": "simulate_gene_knockout",
+        "detailsZh": "Simulate knockout by perturbing target-gene regulatory edges.",
+        "detailsEn": "Simulate knockout by perturbing target-gene regulatory edges.",
+        "script": "scripts/03_simulate_gene_knockout.py",
+        "input": [
+          "models/wt_scgrn.csv",
+          "knockout_gene"
+        ],
+        "output": [
+          "models/ko_scgrn.csv"
+        ],
+        "parameters": [],
+        "layer": "core",
+        "evidence": [
+          "inst/manuscript/AHR/Code/Preenterocytes_DataPreProcessing.R",
+          "inst/manuscript/AHR/Code/Preenterocytes_DataProcessing.R",
+          "R/dRegulation.R",
+          "R/plotKO.R",
+          "R/qFilter.R",
+          "R/scQC.R"
+        ],
+        "evidence_sources": [
+          {
+            "evidence_id": "ev_source-0_inst-manuscript-ahr-code-preenterocytes-datapreprocessing-r",
+            "source": "inst/manuscript/AHR/Code/Preenterocytes_DataPreProcessing.R",
+            "source_type": "notebook",
+            "category": "running_example_notebook_demo_script",
+            "priority_class": "running_example_notebook_demo_script",
+            "claim_type": "source"
+          },
+          {
+            "evidence_id": "ev_source-1_inst-manuscript-ahr-code-preenterocytes-dataprocessing-r",
+            "source": "inst/manuscript/AHR/Code/Preenterocytes_DataProcessing.R",
+            "source_type": "notebook",
+            "category": "running_example_notebook_demo_script",
+            "priority_class": "running_example_notebook_demo_script",
+            "claim_type": "source"
+          },
+          {
+            "evidence_id": "ev_source-2_r-dregulation-r",
+            "source": "R/dRegulation.R",
+            "source_type": "source_code",
+            "category": "source_code_api",
+            "priority_class": "source_code_api",
+            "claim_type": "source"
+          },
+          {
+            "evidence_id": "ev_source-3_r-plotko-r",
+            "source": "R/plotKO.R",
+            "source_type": "source_code",
+            "category": "source_code_api",
+            "priority_class": "source_code_api",
+            "claim_type": "source"
+          },
+          {
+            "evidence_id": "ev_source-4_r-qfilter-r",
+            "source": "R/qFilter.R",
+            "source_type": "source_code",
+            "category": "source_code_api",
+            "priority_class": "source_code_api",
+            "claim_type": "source"
+          },
+          {
+            "evidence_id": "ev_source-5_r-scqc-r",
+            "source": "R/scQC.R",
+            "source_type": "source_code",
+            "category": "source_code_api",
+            "priority_class": "source_code_api",
+            "claim_type": "source"
+          }
+        ],
+        "evidence_priority_class": "running_example_notebook_demo_script",
+        "confidence": 0.85,
+        "evidence_id": "ev_workflow-step-03-simulate-gene-knockout_03-simulate-gene-knockout"
+      },
+      {
+        "id": "04_run_manifold_alignment",
+        "name": "04_run_manifold_alignment",
+        "titleZh": "run_manifold_alignment",
+        "titleEn": "run_manifold_alignment",
+        "detailsZh": "Align WT and KO network manifolds.",
+        "detailsEn": "Align WT and KO network manifolds.",
+        "script": "scripts/04_run_manifold_alignment.py",
+        "input": [
+          "models/wt_scgrn.csv",
+          "models/ko_scgrn.csv"
+        ],
+        "output": [
+          "results/manifold_alignment.json"
+        ],
+        "parameters": [],
+        "layer": "core",
+        "evidence": [
+          "inst/manuscript/AHR/Code/Preenterocytes_DataPreProcessing.R",
+          "inst/manuscript/AHR/Code/Preenterocytes_DataProcessing.R",
+          "R/dRegulation.R",
+          "R/plotKO.R",
+          "R/qFilter.R",
+          "R/scQC.R"
+        ],
+        "evidence_sources": [
+          {
+            "evidence_id": "ev_source-0_inst-manuscript-ahr-code-preenterocytes-datapreprocessing-r",
+            "source": "inst/manuscript/AHR/Code/Preenterocytes_DataPreProcessing.R",
+            "source_type": "notebook",
+            "category": "running_example_notebook_demo_script",
+            "priority_class": "running_example_notebook_demo_script",
+            "claim_type": "source"
+          },
+          {
+            "evidence_id": "ev_source-1_inst-manuscript-ahr-code-preenterocytes-dataprocessing-r",
+            "source": "inst/manuscript/AHR/Code/Preenterocytes_DataProcessing.R",
+            "source_type": "notebook",
+            "category": "running_example_notebook_demo_script",
+            "priority_class": "running_example_notebook_demo_script",
+            "claim_type": "source"
+          },
+          {
+            "evidence_id": "ev_source-2_r-dregulation-r",
+            "source": "R/dRegulation.R",
+            "source_type": "source_code",
+            "category": "source_code_api",
+            "priority_class": "source_code_api",
+            "claim_type": "source"
+          },
+          {
+            "evidence_id": "ev_source-3_r-plotko-r",
+            "source": "R/plotKO.R",
+            "source_type": "source_code",
+            "category": "source_code_api",
+            "priority_class": "source_code_api",
+            "claim_type": "source"
+          },
+          {
+            "evidence_id": "ev_source-4_r-qfilter-r",
+            "source": "R/qFilter.R",
+            "source_type": "source_code",
+            "category": "source_code_api",
+            "priority_class": "source_code_api",
+            "claim_type": "source"
+          },
+          {
+            "evidence_id": "ev_source-5_r-scqc-r",
+            "source": "R/scQC.R",
+            "source_type": "source_code",
+            "category": "source_code_api",
+            "priority_class": "source_code_api",
+            "claim_type": "source"
+          }
+        ],
+        "evidence_priority_class": "running_example_notebook_demo_script",
+        "confidence": 0.85,
+        "evidence_id": "ev_workflow-step-04-run-manifold-alignment_04-run-manifold-alignment"
+      },
+      {
+        "id": "05_calculate_differential_regulation",
+        "name": "05_calculate_differential_regulation",
+        "titleZh": "calculate_differential_regulation",
+        "titleEn": "calculate_differential_regulation",
+        "detailsZh": "Calculate differential regulation between WT and KO networks.",
+        "detailsEn": "Calculate differential regulation between WT and KO networks.",
+        "script": "scripts/05_calculate_differential_regulation.py",
+        "input": [
+          "results/manifold_alignment.json"
+        ],
+        "output": [
+          "results/differential_regulation.csv"
+        ],
+        "parameters": [],
+        "layer": "core",
+        "evidence": [
+          "inst/manuscript/AHR/Code/Preenterocytes_DataPreProcessing.R",
+          "inst/manuscript/AHR/Code/Preenterocytes_DataProcessing.R",
+          "R/dRegulation.R",
+          "R/plotKO.R",
+          "R/qFilter.R",
+          "R/scQC.R"
+        ],
+        "evidence_sources": [
+          {
+            "evidence_id": "ev_source-0_inst-manuscript-ahr-code-preenterocytes-datapreprocessing-r",
+            "source": "inst/manuscript/AHR/Code/Preenterocytes_DataPreProcessing.R",
+            "source_type": "notebook",
+            "category": "running_example_notebook_demo_script",
+            "priority_class": "running_example_notebook_demo_script",
+            "claim_type": "source"
+          },
+          {
+            "evidence_id": "ev_source-1_inst-manuscript-ahr-code-preenterocytes-dataprocessing-r",
+            "source": "inst/manuscript/AHR/Code/Preenterocytes_DataProcessing.R",
+            "source_type": "notebook",
+            "category": "running_example_notebook_demo_script",
+            "priority_class": "running_example_notebook_demo_script",
+            "claim_type": "source"
+          },
+          {
+            "evidence_id": "ev_source-2_r-dregulation-r",
+            "source": "R/dRegulation.R",
+            "source_type": "source_code",
+            "category": "source_code_api",
+            "priority_class": "source_code_api",
+            "claim_type": "source"
+          },
+          {
+            "evidence_id": "ev_source-3_r-plotko-r",
+            "source": "R/plotKO.R",
+            "source_type": "source_code",
+            "category": "source_code_api",
+            "priority_class": "source_code_api",
+            "claim_type": "source"
+          },
+          {
+            "evidence_id": "ev_source-4_r-qfilter-r",
+            "source": "R/qFilter.R",
+            "source_type": "source_code",
+            "category": "source_code_api",
+            "priority_class": "source_code_api",
+            "claim_type": "source"
+          },
+          {
+            "evidence_id": "ev_source-5_r-scqc-r",
+            "source": "R/scQC.R",
+            "source_type": "source_code",
+            "category": "source_code_api",
+            "priority_class": "source_code_api",
+            "claim_type": "source"
+          }
+        ],
+        "evidence_priority_class": "running_example_notebook_demo_script",
+        "confidence": 0.85,
+        "evidence_id": "ev_workflow-step-05-calculate-differential-regulation_05-calculate-differential-regulation"
+      },
+      {
+        "id": "06_rank_perturbed_genes",
+        "name": "06_rank_perturbed_genes",
+        "titleZh": "rank_perturbed_genes",
+        "titleEn": "rank_perturbed_genes",
+        "detailsZh": "Rank genes by perturbation or differential-regulation score.",
+        "detailsEn": "Rank genes by perturbation or differential-regulation score.",
+        "script": "scripts/06_rank_perturbed_genes.py",
+        "input": [
+          "results/differential_regulation.csv"
+        ],
+        "output": [
+          "results/perturbed_gene_ranking.csv"
+        ],
+        "parameters": [],
+        "layer": "core",
+        "evidence": [
+          "inst/manuscript/AHR/Code/Preenterocytes_DataPreProcessing.R",
+          "inst/manuscript/AHR/Code/Preenterocytes_DataProcessing.R",
+          "R/dRegulation.R",
+          "R/plotKO.R",
+          "R/qFilter.R",
+          "R/scQC.R"
+        ],
+        "evidence_sources": [
+          {
+            "evidence_id": "ev_source-0_inst-manuscript-ahr-code-preenterocytes-datapreprocessing-r",
+            "source": "inst/manuscript/AHR/Code/Preenterocytes_DataPreProcessing.R",
+            "source_type": "notebook",
+            "category": "running_example_notebook_demo_script",
+            "priority_class": "running_example_notebook_demo_script",
+            "claim_type": "source"
+          },
+          {
+            "evidence_id": "ev_source-1_inst-manuscript-ahr-code-preenterocytes-dataprocessing-r",
+            "source": "inst/manuscript/AHR/Code/Preenterocytes_DataProcessing.R",
+            "source_type": "notebook",
+            "category": "running_example_notebook_demo_script",
+            "priority_class": "running_example_notebook_demo_script",
+            "claim_type": "source"
+          },
+          {
+            "evidence_id": "ev_source-2_r-dregulation-r",
+            "source": "R/dRegulation.R",
+            "source_type": "source_code",
+            "category": "source_code_api",
+            "priority_class": "source_code_api",
+            "claim_type": "source"
+          },
+          {
+            "evidence_id": "ev_source-3_r-plotko-r",
+            "source": "R/plotKO.R",
+            "source_type": "source_code",
+            "category": "source_code_api",
+            "priority_class": "source_code_api",
+            "claim_type": "source"
+          },
+          {
+            "evidence_id": "ev_source-4_r-qfilter-r",
+            "source": "R/qFilter.R",
+            "source_type": "source_code",
+            "category": "source_code_api",
+            "priority_class": "source_code_api",
+            "claim_type": "source"
+          },
+          {
+            "evidence_id": "ev_source-5_r-scqc-r",
+            "source": "R/scQC.R",
+            "source_type": "source_code",
+            "category": "source_code_api",
+            "priority_class": "source_code_api",
+            "claim_type": "source"
+          }
+        ],
+        "evidence_priority_class": "running_example_notebook_demo_script",
+        "confidence": 0.85,
+        "evidence_id": "ev_workflow-step-06-rank-perturbed-genes_06-rank-perturbed-genes"
+      },
+      {
+        "id": "07_run_pathway_enrichment",
+        "name": "07_run_pathway_enrichment",
+        "titleZh": "run_pathway_enrichment",
+        "titleEn": "run_pathway_enrichment",
+        "detailsZh": "Run optional pathway or GO enrichment when organism and database support it.",
+        "detailsEn": "Run optional pathway or GO enrichment when organism and database support it.",
+        "script": "scripts/07_run_pathway_enrichment.py",
+        "input": [
+          "results/perturbed_gene_ranking.csv",
+          "enrichment_database"
+        ],
+        "output": [
+          "results/pathway_enrichment.csv"
+        ],
+        "parameters": [],
+        "layer": "core",
+        "evidence": [
+          "README.md",
+          "inst/manuscript/AHR/Code/Preenterocytes_DataPreProcessing.R",
+          "inst/manuscript/AHR/Code/Preenterocytes_DataProcessing.R"
+        ],
+        "evidence_sources": [
+          {
+            "evidence_id": "ev_source-0_readme-md",
+            "source": "README.md",
+            "source_type": "readme",
+            "category": "readme",
+            "priority_class": "readme",
+            "claim_type": "source"
+          },
+          {
+            "evidence_id": "ev_source-1_inst-manuscript-ahr-code-preenterocytes-datapreprocessing-r",
+            "source": "inst/manuscript/AHR/Code/Preenterocytes_DataPreProcessing.R",
+            "source_type": "notebook",
+            "category": "running_example_notebook_demo_script",
+            "priority_class": "running_example_notebook_demo_script",
+            "claim_type": "source"
+          },
+          {
+            "evidence_id": "ev_source-2_inst-manuscript-ahr-code-preenterocytes-dataprocessing-r",
+            "source": "inst/manuscript/AHR/Code/Preenterocytes_DataProcessing.R",
+            "source_type": "notebook",
+            "category": "running_example_notebook_demo_script",
+            "priority_class": "running_example_notebook_demo_script",
+            "claim_type": "source"
+          }
+        ],
+        "evidence_priority_class": "running_example_notebook_demo_script",
+        "confidence": 0.85,
+        "evidence_id": "ev_workflow-step-07-run-pathway-enrichment_07-run-pathway-enrichment"
+      },
+      {
+        "id": "08_generate_report",
+        "name": "08_generate_report",
+        "titleZh": "generate_report",
+        "titleEn": "generate_report",
+        "detailsZh": "Generate QC summary, ranked outputs, interpretation caveats, and reproducibility metadata.",
+        "detailsEn": "Generate QC summary, ranked outputs, interpretation caveats, and reproducibility metadata.",
+        "script": "scripts/08_generate_report.py",
+        "input": [
+          "results/differential_regulation.csv",
+          "results/perturbed_gene_ranking.csv"
+        ],
+        "output": [
+          "reports/report_template.md",
+          "result.json"
+        ],
+        "parameters": [],
         "layer": "wrapper",
         "evidence": [
           "README.md",
-          "DESCRIPTION"
-        ]
+          "inst/manuscript/AHR/Code/Preenterocytes_DataPreProcessing.R",
+          "inst/manuscript/AHR/Code/Preenterocytes_DataProcessing.R"
+        ],
+        "evidence_sources": [
+          {
+            "evidence_id": "ev_source-0_readme-md",
+            "source": "README.md",
+            "source_type": "readme",
+            "category": "readme",
+            "priority_class": "readme",
+            "claim_type": "source"
+          },
+          {
+            "evidence_id": "ev_source-1_inst-manuscript-ahr-code-preenterocytes-datapreprocessing-r",
+            "source": "inst/manuscript/AHR/Code/Preenterocytes_DataPreProcessing.R",
+            "source_type": "notebook",
+            "category": "running_example_notebook_demo_script",
+            "priority_class": "running_example_notebook_demo_script",
+            "claim_type": "source"
+          },
+          {
+            "evidence_id": "ev_source-2_inst-manuscript-ahr-code-preenterocytes-dataprocessing-r",
+            "source": "inst/manuscript/AHR/Code/Preenterocytes_DataProcessing.R",
+            "source_type": "notebook",
+            "category": "running_example_notebook_demo_script",
+            "priority_class": "running_example_notebook_demo_script",
+            "claim_type": "source"
+          }
+        ],
+        "evidence_priority_class": "running_example_notebook_demo_script",
+        "confidence": 0.85,
+        "evidence_id": "ev_workflow-step-08-generate-report_08-generate-report"
+      }
+    ],
+    "dag_edges": [
+      {
+        "source": "00_validate_input",
+        "target": "01_preprocess_expression_matrix",
+        "inference": "variable_flow",
+        "detail": "Both steps operate on the same declared variable(s): wt_expression_matrix",
+        "structured_signals": {
+          "execution_order": [],
+          "variable_flow": [],
+          "file_flow": [],
+          "function_call_graph": []
+        },
+        "evidence": [
+          "inst/manuscript/AHR/Code/Preenterocytes_DataPreProcessing.R",
+          "inst/manuscript/AHR/Code/Preenterocytes_DataProcessing.R"
+        ],
+        "evidence_sources": [
+          {
+            "evidence_id": "ev_dag-edge-00-validate-input-01-preprocess-expression-matrix-0_inst-manuscript-ahr-code-preente",
+            "source": "inst/manuscript/AHR/Code/Preenterocytes_DataPreProcessing.R",
+            "source_type": "notebook",
+            "category": "running_example_notebook_demo_script",
+            "priority_class": "running_example_notebook_demo_script",
+            "claim_type": "dag_edge.00_validate_input->01_preprocess_expression_matrix"
+          },
+          {
+            "evidence_id": "ev_dag-edge-00-validate-input-01-preprocess-expression-matrix-1_inst-manuscript-ahr-code-preente",
+            "source": "inst/manuscript/AHR/Code/Preenterocytes_DataProcessing.R",
+            "source_type": "notebook",
+            "category": "running_example_notebook_demo_script",
+            "priority_class": "running_example_notebook_demo_script",
+            "claim_type": "dag_edge.00_validate_input->01_preprocess_expression_matrix"
+          }
+        ],
+        "evidence_priority_class": "variable_flow",
+        "evidence_priority": [
+          "notebook_script_execution_order",
+          "variable_flow",
+          "file_flow",
+          "function_call_graph",
+          "semantic_dependency",
+          "manual_fallback_rule"
+        ],
+        "evidence_id": "ev_dag-edge-00-validate-input-01-preprocess-expression-matrix_00-validate-input-01-preprocess-ex"
+      },
+      {
+        "source": "01_preprocess_expression_matrix",
+        "target": "02_construct_wt_scgrn",
+        "inference": "file_flow",
+        "detail": "Previous output feeds current input: prepared/wt_matrix.csv",
+        "structured_signals": {
+          "execution_order": [],
+          "variable_flow": [],
+          "file_flow": [],
+          "function_call_graph": []
+        },
+        "evidence": [
+          "inst/manuscript/AHR/Code/Preenterocytes_DataPreProcessing.R",
+          "inst/manuscript/AHR/Code/Preenterocytes_DataProcessing.R"
+        ],
+        "evidence_sources": [
+          {
+            "evidence_id": "ev_dag-edge-01-preprocess-expression-matrix-02-construct-wt-scgrn-0_inst-manuscript-ahr-code-pre",
+            "source": "inst/manuscript/AHR/Code/Preenterocytes_DataPreProcessing.R",
+            "source_type": "notebook",
+            "category": "running_example_notebook_demo_script",
+            "priority_class": "running_example_notebook_demo_script",
+            "claim_type": "dag_edge.01_preprocess_expression_matrix->02_construct_wt_scgrn"
+          },
+          {
+            "evidence_id": "ev_dag-edge-01-preprocess-expression-matrix-02-construct-wt-scgrn-1_inst-manuscript-ahr-code-pre",
+            "source": "inst/manuscript/AHR/Code/Preenterocytes_DataProcessing.R",
+            "source_type": "notebook",
+            "category": "running_example_notebook_demo_script",
+            "priority_class": "running_example_notebook_demo_script",
+            "claim_type": "dag_edge.01_preprocess_expression_matrix->02_construct_wt_scgrn"
+          }
+        ],
+        "evidence_priority_class": "file_flow",
+        "evidence_priority": [
+          "notebook_script_execution_order",
+          "variable_flow",
+          "file_flow",
+          "function_call_graph",
+          "semantic_dependency",
+          "manual_fallback_rule"
+        ],
+        "evidence_id": "ev_dag-edge-01-preprocess-expression-matrix-02-construct-wt-scgrn_01-preprocess-expression-matri"
+      },
+      {
+        "source": "02_construct_wt_scgrn",
+        "target": "03_simulate_gene_knockout",
+        "inference": "file_flow",
+        "detail": "Previous output feeds current input: models/wt_scgrn.csv",
+        "structured_signals": {
+          "execution_order": [],
+          "variable_flow": [],
+          "file_flow": [],
+          "function_call_graph": []
+        },
+        "evidence": [
+          "inst/manuscript/AHR/Code/Preenterocytes_DataPreProcessing.R",
+          "inst/manuscript/AHR/Code/Preenterocytes_DataProcessing.R"
+        ],
+        "evidence_sources": [
+          {
+            "evidence_id": "ev_dag-edge-02-construct-wt-scgrn-03-simulate-gene-knockout-0_inst-manuscript-ahr-code-preentero",
+            "source": "inst/manuscript/AHR/Code/Preenterocytes_DataPreProcessing.R",
+            "source_type": "notebook",
+            "category": "running_example_notebook_demo_script",
+            "priority_class": "running_example_notebook_demo_script",
+            "claim_type": "dag_edge.02_construct_wt_scgrn->03_simulate_gene_knockout"
+          },
+          {
+            "evidence_id": "ev_dag-edge-02-construct-wt-scgrn-03-simulate-gene-knockout-1_inst-manuscript-ahr-code-preentero",
+            "source": "inst/manuscript/AHR/Code/Preenterocytes_DataProcessing.R",
+            "source_type": "notebook",
+            "category": "running_example_notebook_demo_script",
+            "priority_class": "running_example_notebook_demo_script",
+            "claim_type": "dag_edge.02_construct_wt_scgrn->03_simulate_gene_knockout"
+          }
+        ],
+        "evidence_priority_class": "file_flow",
+        "evidence_priority": [
+          "notebook_script_execution_order",
+          "variable_flow",
+          "file_flow",
+          "function_call_graph",
+          "semantic_dependency",
+          "manual_fallback_rule"
+        ],
+        "evidence_id": "ev_dag-edge-02-construct-wt-scgrn-03-simulate-gene-knockout_02-construct-wt-scgrn-03-simulate-ge"
+      },
+      {
+        "source": "03_simulate_gene_knockout",
+        "target": "04_run_manifold_alignment",
+        "inference": "file_flow",
+        "detail": "Previous output feeds current input: models/ko_scgrn.csv",
+        "structured_signals": {
+          "execution_order": [],
+          "variable_flow": [],
+          "file_flow": [],
+          "function_call_graph": []
+        },
+        "evidence": [
+          "inst/manuscript/AHR/Code/Preenterocytes_DataPreProcessing.R",
+          "inst/manuscript/AHR/Code/Preenterocytes_DataProcessing.R"
+        ],
+        "evidence_sources": [
+          {
+            "evidence_id": "ev_dag-edge-03-simulate-gene-knockout-04-run-manifold-alignment-0_inst-manuscript-ahr-code-preen",
+            "source": "inst/manuscript/AHR/Code/Preenterocytes_DataPreProcessing.R",
+            "source_type": "notebook",
+            "category": "running_example_notebook_demo_script",
+            "priority_class": "running_example_notebook_demo_script",
+            "claim_type": "dag_edge.03_simulate_gene_knockout->04_run_manifold_alignment"
+          },
+          {
+            "evidence_id": "ev_dag-edge-03-simulate-gene-knockout-04-run-manifold-alignment-1_inst-manuscript-ahr-code-preen",
+            "source": "inst/manuscript/AHR/Code/Preenterocytes_DataProcessing.R",
+            "source_type": "notebook",
+            "category": "running_example_notebook_demo_script",
+            "priority_class": "running_example_notebook_demo_script",
+            "claim_type": "dag_edge.03_simulate_gene_knockout->04_run_manifold_alignment"
+          }
+        ],
+        "evidence_priority_class": "file_flow",
+        "evidence_priority": [
+          "notebook_script_execution_order",
+          "variable_flow",
+          "file_flow",
+          "function_call_graph",
+          "semantic_dependency",
+          "manual_fallback_rule"
+        ],
+        "evidence_id": "ev_dag-edge-03-simulate-gene-knockout-04-run-manifold-alignment_03-simulate-gene-knockout-04-run"
+      },
+      {
+        "source": "04_run_manifold_alignment",
+        "target": "05_calculate_differential_regulation",
+        "inference": "file_flow",
+        "detail": "Previous output feeds current input: results/manifold_alignment.json",
+        "structured_signals": {
+          "execution_order": [],
+          "variable_flow": [],
+          "file_flow": [],
+          "function_call_graph": []
+        },
+        "evidence": [
+          "inst/manuscript/AHR/Code/Preenterocytes_DataPreProcessing.R",
+          "inst/manuscript/AHR/Code/Preenterocytes_DataProcessing.R"
+        ],
+        "evidence_sources": [
+          {
+            "evidence_id": "ev_dag-edge-04-run-manifold-alignment-05-calculate-differential-regulation-_inst-manuscript-ahr-",
+            "source": "inst/manuscript/AHR/Code/Preenterocytes_DataPreProcessing.R",
+            "source_type": "notebook",
+            "category": "running_example_notebook_demo_script",
+            "priority_class": "running_example_notebook_demo_script",
+            "claim_type": "dag_edge.04_run_manifold_alignment->05_calculate_differential_regulation"
+          },
+          {
+            "evidence_id": "ev_dag-edge-04-run-manifold-alignment-05-calculate-differential-regulation-_inst-manuscript-ahr-",
+            "source": "inst/manuscript/AHR/Code/Preenterocytes_DataProcessing.R",
+            "source_type": "notebook",
+            "category": "running_example_notebook_demo_script",
+            "priority_class": "running_example_notebook_demo_script",
+            "claim_type": "dag_edge.04_run_manifold_alignment->05_calculate_differential_regulation"
+          }
+        ],
+        "evidence_priority_class": "file_flow",
+        "evidence_priority": [
+          "notebook_script_execution_order",
+          "variable_flow",
+          "file_flow",
+          "function_call_graph",
+          "semantic_dependency",
+          "manual_fallback_rule"
+        ],
+        "evidence_id": "ev_dag-edge-04-run-manifold-alignment-05-calculate-differential-regulation_04-run-manifold-align"
+      },
+      {
+        "source": "05_calculate_differential_regulation",
+        "target": "06_rank_perturbed_genes",
+        "inference": "file_flow",
+        "detail": "Previous output feeds current input: results/differential_regulation.csv",
+        "structured_signals": {
+          "execution_order": [],
+          "variable_flow": [],
+          "file_flow": [],
+          "function_call_graph": []
+        },
+        "evidence": [
+          "inst/manuscript/AHR/Code/Preenterocytes_DataPreProcessing.R",
+          "inst/manuscript/AHR/Code/Preenterocytes_DataProcessing.R"
+        ],
+        "evidence_sources": [
+          {
+            "evidence_id": "ev_dag-edge-05-calculate-differential-regulation-06-rank-perturbed-genes-0_inst-manuscript-ahr-c",
+            "source": "inst/manuscript/AHR/Code/Preenterocytes_DataPreProcessing.R",
+            "source_type": "notebook",
+            "category": "running_example_notebook_demo_script",
+            "priority_class": "running_example_notebook_demo_script",
+            "claim_type": "dag_edge.05_calculate_differential_regulation->06_rank_perturbed_genes"
+          },
+          {
+            "evidence_id": "ev_dag-edge-05-calculate-differential-regulation-06-rank-perturbed-genes-1_inst-manuscript-ahr-c",
+            "source": "inst/manuscript/AHR/Code/Preenterocytes_DataProcessing.R",
+            "source_type": "notebook",
+            "category": "running_example_notebook_demo_script",
+            "priority_class": "running_example_notebook_demo_script",
+            "claim_type": "dag_edge.05_calculate_differential_regulation->06_rank_perturbed_genes"
+          }
+        ],
+        "evidence_priority_class": "file_flow",
+        "evidence_priority": [
+          "notebook_script_execution_order",
+          "variable_flow",
+          "file_flow",
+          "function_call_graph",
+          "semantic_dependency",
+          "manual_fallback_rule"
+        ],
+        "evidence_id": "ev_dag-edge-05-calculate-differential-regulation-06-rank-perturbed-genes_05-calculate-differenti"
+      },
+      {
+        "source": "06_rank_perturbed_genes",
+        "target": "07_run_pathway_enrichment",
+        "inference": "file_flow",
+        "detail": "Previous output feeds current input: results/perturbed_gene_ranking.csv",
+        "structured_signals": {
+          "execution_order": [],
+          "variable_flow": [],
+          "file_flow": [],
+          "function_call_graph": []
+        },
+        "evidence": [
+          "inst/manuscript/AHR/Code/Preenterocytes_DataPreProcessing.R",
+          "inst/manuscript/AHR/Code/Preenterocytes_DataProcessing.R",
+          "README.md"
+        ],
+        "evidence_sources": [
+          {
+            "evidence_id": "ev_dag-edge-06-rank-perturbed-genes-07-run-pathway-enrichment-0_inst-manuscript-ahr-code-preente",
+            "source": "inst/manuscript/AHR/Code/Preenterocytes_DataPreProcessing.R",
+            "source_type": "notebook",
+            "category": "running_example_notebook_demo_script",
+            "priority_class": "running_example_notebook_demo_script",
+            "claim_type": "dag_edge.06_rank_perturbed_genes->07_run_pathway_enrichment"
+          },
+          {
+            "evidence_id": "ev_dag-edge-06-rank-perturbed-genes-07-run-pathway-enrichment-1_inst-manuscript-ahr-code-preente",
+            "source": "inst/manuscript/AHR/Code/Preenterocytes_DataProcessing.R",
+            "source_type": "notebook",
+            "category": "running_example_notebook_demo_script",
+            "priority_class": "running_example_notebook_demo_script",
+            "claim_type": "dag_edge.06_rank_perturbed_genes->07_run_pathway_enrichment"
+          },
+          {
+            "evidence_id": "ev_dag-edge-06-rank-perturbed-genes-07-run-pathway-enrichment-2_readme-md",
+            "source": "README.md",
+            "source_type": "readme",
+            "category": "readme",
+            "priority_class": "readme",
+            "claim_type": "dag_edge.06_rank_perturbed_genes->07_run_pathway_enrichment"
+          }
+        ],
+        "evidence_priority_class": "file_flow",
+        "evidence_priority": [
+          "notebook_script_execution_order",
+          "variable_flow",
+          "file_flow",
+          "function_call_graph",
+          "semantic_dependency",
+          "manual_fallback_rule"
+        ],
+        "evidence_id": "ev_dag-edge-06-rank-perturbed-genes-07-run-pathway-enrichment_06-rank-perturbed-genes-07-run-pat"
+      },
+      {
+        "source": "07_run_pathway_enrichment",
+        "target": "08_generate_report",
+        "inference": "variable_flow",
+        "detail": "Both steps operate on the same declared variable(s): results/perturbed_gene_ranking.csv",
+        "structured_signals": {
+          "execution_order": [],
+          "variable_flow": [],
+          "file_flow": [],
+          "function_call_graph": []
+        },
+        "evidence": [
+          "README.md",
+          "inst/manuscript/AHR/Code/Preenterocytes_DataPreProcessing.R",
+          "inst/manuscript/AHR/Code/Preenterocytes_DataProcessing.R"
+        ],
+        "evidence_sources": [
+          {
+            "evidence_id": "ev_dag-edge-07-run-pathway-enrichment-08-generate-report-0_readme-md",
+            "source": "README.md",
+            "source_type": "readme",
+            "category": "readme",
+            "priority_class": "readme",
+            "claim_type": "dag_edge.07_run_pathway_enrichment->08_generate_report"
+          },
+          {
+            "evidence_id": "ev_dag-edge-07-run-pathway-enrichment-08-generate-report-1_inst-manuscript-ahr-code-preenterocyt",
+            "source": "inst/manuscript/AHR/Code/Preenterocytes_DataPreProcessing.R",
+            "source_type": "notebook",
+            "category": "running_example_notebook_demo_script",
+            "priority_class": "running_example_notebook_demo_script",
+            "claim_type": "dag_edge.07_run_pathway_enrichment->08_generate_report"
+          },
+          {
+            "evidence_id": "ev_dag-edge-07-run-pathway-enrichment-08-generate-report-2_inst-manuscript-ahr-code-preenterocyt",
+            "source": "inst/manuscript/AHR/Code/Preenterocytes_DataProcessing.R",
+            "source_type": "notebook",
+            "category": "running_example_notebook_demo_script",
+            "priority_class": "running_example_notebook_demo_script",
+            "claim_type": "dag_edge.07_run_pathway_enrichment->08_generate_report"
+          }
+        ],
+        "evidence_priority_class": "variable_flow",
+        "evidence_priority": [
+          "notebook_script_execution_order",
+          "variable_flow",
+          "file_flow",
+          "function_call_graph",
+          "semantic_dependency",
+          "manual_fallback_rule"
+        ],
+        "evidence_id": "ev_dag-edge-07-run-pathway-enrichment-08-generate-report_07-run-pathway-enrichment-08-generate-r"
       }
     ],
     "command_templates": [
@@ -358,69 +1740,73 @@
       "perturbation_summary",
       "differential_regulation"
     ],
-    "supports_native_run": false
+    "supports_native_run": false,
+    "native_run_status": {
+      "status": "blocked_until_adapter_is_implemented",
+      "reason": "The generated child skill keeps dry-run behavior until a source-backed adapter is explicitly implemented and tested."
+    }
   },
   "qcContract": {
     "rules": [
       {
         "metric": "input_contract_integrity",
-        "zh": "检查 WT 输入矩阵路径、方向、计数状态和 knockout gene 是否满足合同。",
+        "zh": "Check whether the WT matrix path, orientation, count state, and knockout gene satisfy the contract.",
         "en": "Check whether the WT matrix path, orientation, count state, and knockout gene satisfy the contract.",
-        "passZh": "输入合同通过，可以进入执行规划。",
+        "passZh": "The input contract passes and execution planning may continue.",
         "passEn": "The input contract passes and execution planning may continue.",
-        "warnZh": "dry-run 仅完成预检，尚未形成方法级 QC 结论。",
+        "warnZh": "The dry-run only completed preflight checks and has not produced method-level QC conclusions.",
         "warnEn": "The dry-run only completed preflight checks and has not produced method-level QC conclusions.",
-        "failZh": "输入违反合同，结果不能当作可靠分析执行。",
+        "failZh": "The input violates the contract and the output must not be treated as a reliable executed analysis.",
         "failEn": "The input violates the contract and the output must not be treated as a reliable executed analysis."
       },
       {
         "metric": "single_cell_preflight",
-        "zh": "检查单细胞输入是否保留基因名，并避免把已标准化矩阵冒充原始计数。",
+        "zh": "Check that gene names are retained and that a normalized matrix is not misrepresented as raw counts.",
         "en": "Check that gene names are retained and that a normalized matrix is not misrepresented as raw counts.",
-        "passZh": "对象状态满足单细胞扰动工作流前提。",
+        "passZh": "The object state satisfies the prerequisites for a single-cell perturbation workflow.",
         "passEn": "The object state satisfies the prerequisites for a single-cell perturbation workflow.",
-        "warnZh": "对象状态部分依赖 manifest 声明，仍需在正式运行前核实。",
+        "warnZh": "Part of the object state still depends on manifest declarations and should be verified before a full run.",
         "warnEn": "Part of the object state still depends on manifest declarations and should be verified before a full run.",
-        "failZh": "对象状态与方法要求不一致。",
+        "failZh": "The object state is inconsistent with the method requirements.",
         "failEn": "The object state is inconsistent with the method requirements."
       },
       {
         "metric": "runtime_readiness",
         "requires_runtime": true,
-        "zh": "检查 Python 和 Rscript 是否可用。",
+        "zh": "Check whether Python and Rscript are available.",
         "en": "Check whether Python and Rscript are available.",
-        "passZh": "运行时已就绪。",
+        "passZh": "Required runtimes are ready.",
         "passEn": "Required runtimes are ready.",
-        "warnZh": "dry-run 可以继续，但 native execution 尚未真正消耗方法运行时。",
+        "warnZh": "The dry-run may continue, but native execution has not yet consumed the method runtime.",
         "warnEn": "The dry-run may continue, but native execution has not yet consumed the method runtime.",
-        "failZh": "必需运行时缺失，应返回 blocked 状态。",
+        "failZh": "A required runtime is missing and the wrapper should return a blocked status.",
         "failEn": "A required runtime is missing and the wrapper should return a blocked status."
       }
     ],
     "validation_scenarios": [
       {
-        "zh": "最小 smoke test：manifest 有效、dry-run 成功、bundle 完整。",
+        "zh": "Minimum smoke test: valid manifest, successful dry-run, and a complete result bundle.",
         "en": "Minimum smoke test: valid manifest, successful dry-run, and a complete result bundle."
       },
       {
-        "zh": "缺失运行时测试：模拟 Rscript 缺失并返回 blocked_runtime_missing。",
+        "zh": "Missing-runtime test: simulate a missing Rscript and return blocked_runtime_missing.",
         "en": "Missing-runtime test: simulate a missing Rscript and return blocked_runtime_missing."
       }
     ],
     "interpretation_boundary": [
       {
         "status": "pass",
-        "zh": "通过仅表示合同和预检查通过，不等同于生物学结论已经成立。",
+        "zh": "A pass only means the contract and preflight checks succeeded; it does not mean the biological conclusion is already established.",
         "en": "A pass only means the contract and preflight checks succeeded; it does not mean the biological conclusion is already established."
       },
       {
         "status": "warn",
-        "zh": "警告表示结果可用于规划或报告，但必须保留 caveat。",
+        "zh": "A warning means the output may guide planning or reporting, but caveats must remain visible.",
         "en": "A warning means the output may guide planning or reporting, but caveats must remain visible."
       },
       {
         "status": "fail",
-        "zh": "失败表示结果不能写成可信结论。",
+        "zh": "A failure means the output must not be written up as a reliable conclusion.",
         "en": "A failure means the output must not be written up as a reliable conclusion."
       }
     ]
@@ -433,7 +1819,19 @@
       "tables",
       "figures",
       "figure_data",
+      "parameters",
+      "parameters/resolved_parameters.json",
+      "qc",
+      "qc/input_validation.json",
+      "qc/runtime_probe.json",
+      "qc/qc_summary.json",
+      "workflow",
+      "workflow/steps.json",
+      "workflow/dag_edges.json",
       "reproducibility",
+      "reproducibility/plan.json",
+      "reproducibility/execution_plan.json",
+      "reproducibility/evidence_summary.json",
       "logs"
     ],
     "result_fields": [
@@ -443,6 +1841,8 @@
       "runtime_probe",
       "input_validation",
       "parameter_resolution",
+      "workflow_summary",
+      "evidence_summary",
       "qc_summary",
       "artifacts",
       "caveats",
@@ -450,11 +1850,11 @@
     ],
     "bundle_notes": [
       {
-        "zh": "即使是 dry-run，也必须产出完整目录结构和机器可读 result.json。",
+        "zh": "Even a dry-run must emit the full directory structure and a machine-readable result.json.",
         "en": "Even a dry-run must emit the full directory structure and a machine-readable result.json."
       },
       {
-        "zh": "不要把 manuscript 复现实例的产物静默写成核心方法已经得出的结论。",
+        "zh": "Do not silently rewrite manuscript-reproduction artifacts as if they were core-method conclusions.",
         "en": "Do not silently rewrite manuscript-reproduction artifacts as if they were core-method conclusions."
       }
     ]
@@ -462,21 +1862,21 @@
   "reproducibilityContract": {
     "capture_items": [
       {
-        "zh": "输入 manifest 路径和关键状态字段。",
+        "zh": "Input manifest path and key state fields.",
         "en": "Input manifest path and key state fields."
       },
       {
-        "zh": "参数解析来源和默认值理由。",
+        "zh": "Parameter-resolution sources and default rationales.",
         "en": "Parameter-resolution sources and default rationales."
       },
       {
-        "zh": "运行时探测结果、计划命令和安装记录。",
+        "zh": "Runtime probe results, planned commands, and installation records.",
         "en": "Runtime probe results, planned commands, and installation records."
       }
     ],
     "install_policy": [
       {
-        "zh": "如果目标运行环境缺少依赖，只在该环境内安装，并把命令写入 reproducibility 目录。",
+        "zh": "If the target runtime environment lacks dependencies, install them only inside that environment and record the commands under reproducibility.",
         "en": "If the target runtime environment lacks dependencies, install them only inside that environment and record the commands under reproducibility."
       }
     ]
@@ -500,11 +1900,11 @@
     },
     "smoke_scenarios": [
       {
-        "zh": "dry-run 生成完整 bundle。",
+        "zh": "The dry-run generates the full bundle.",
         "en": "The dry-run generates the full bundle."
       },
       {
-        "zh": "缺失 report.md 时 validate-output 返回失败。",
+        "zh": "validate-output fails when report.md is missing.",
         "en": "validate-output fails when report.md is missing."
       }
     ]
@@ -512,42 +1912,42 @@
   "references": {
     "methods": [
       {
-        "title": "Core implementation / 核心实现",
+        "title": "Core implementation",
         "items": [
           {
             "label": "R/dRegulation.R",
             "url": "https://github.com/cailab-tamu/scTenifoldKnk/blob/master/R/dRegulation.R",
-            "noteZh": "差异调控或统计评分实现。",
+            "noteZh": "Differential-regulation or statistical-scoring implementation.",
             "noteEn": "Differential-regulation or statistical-scoring implementation."
           },
           {
             "label": "R/plotKO.R",
             "url": "https://github.com/cailab-tamu/scTenifoldKnk/blob/master/R/plotKO.R",
-            "noteZh": "可视化或下游结果展示实现。",
+            "noteZh": "Visualization or downstream result-display implementation.",
             "noteEn": "Visualization or downstream result-display implementation."
           },
           {
             "label": "R/qFilter.R",
             "url": "https://github.com/cailab-tamu/scTenifoldKnk/blob/master/R/qFilter.R",
-            "noteZh": "主实现文件。",
+            "noteZh": "Main implementation file.",
             "noteEn": "Main implementation file."
           },
           {
             "label": "R/scQC.R",
             "url": "https://github.com/cailab-tamu/scTenifoldKnk/blob/master/R/scQC.R",
-            "noteZh": "质量控制实现。",
+            "noteZh": "Quality-control implementation.",
             "noteEn": "Quality-control implementation."
           },
           {
             "label": "R/scTenifoldKnk.R",
             "url": "https://github.com/cailab-tamu/scTenifoldKnk/blob/master/R/scTenifoldKnk.R",
-            "noteZh": "主实现文件。",
+            "noteZh": "Main implementation file.",
             "noteEn": "Main implementation file."
           },
           {
             "label": "R/strictDirection.R",
             "url": "https://github.com/cailab-tamu/scTenifoldKnk/blob/master/R/strictDirection.R",
-            "noteZh": "主实现文件。",
+            "noteZh": "Main implementation file.",
             "noteEn": "Main implementation file."
           }
         ]
@@ -555,47 +1955,47 @@
     ],
     "papers": [
       {
-        "title": "Paper evidence / 论文证据",
+        "title": "Paper evidence",
         "items": [
           {
             "label": "scTenifoldKnk: An efficient virtual knockout tool for gene function predictions via single-cell gene regulatory network perturbation",
             "url": "https://doi.org/10.1016/j.patter.2022.100434",
-            "noteZh": "论文摘要证据：scTenifoldKnk predicts gene function from wild-type single-cell RNA-seq data by constructing single-cell gene regulatory networks, performing virtual knockout in silico, comparing perturbed and wild-type manifolds, and prioritizing differential regulation programs.",
-            "noteEn": "Paper abstract evidence: scTenifoldKnk predicts gene function from wild-type single-cell RNA-seq data by constructing single-cell gene regulatory networks, performing virtual knockout in silico, comparing perturbed and wild-type manifolds, and prioritizing differential regulation programs."
+            "noteZh": "Paper-source evidence.",
+            "noteEn": "Paper-source evidence."
           }
         ]
       },
       {
-        "title": "Repository and reproduction evidence / 仓库与复现证据",
+        "title": "Repository and reproduction evidence",
         "items": [
           {
             "label": "README.md",
             "url": "https://github.com/cailab-tamu/scTenifoldKnk/blob/master/README.md",
-            "noteZh": "仓库总览与输入输出说明。",
+            "noteZh": "Repository overview plus input and output guidance.",
             "noteEn": "Repository overview plus input and output guidance."
           },
           {
             "label": "inst/manuscript/AHR/Code/Preenterocytes_DataPreProcessing.R",
             "url": "https://github.com/cailab-tamu/scTenifoldKnk/blob/master/inst/manuscript/AHR/Code/Preenterocytes_DataPreProcessing.R",
-            "noteZh": "复现实例或 manuscript 分支证据。",
+            "noteZh": "Reproduction example or manuscript-branch evidence.",
             "noteEn": "Reproduction example or manuscript-branch evidence."
           },
           {
             "label": "inst/manuscript/AHR/Code/Preenterocytes_DataProcessing.R",
             "url": "https://github.com/cailab-tamu/scTenifoldKnk/blob/master/inst/manuscript/AHR/Code/Preenterocytes_DataProcessing.R",
-            "noteZh": "复现实例或 manuscript 分支证据。",
+            "noteZh": "Reproduction example or manuscript-branch evidence.",
             "noteEn": "Reproduction example or manuscript-branch evidence."
           },
           {
             "label": "DESCRIPTION",
             "url": "https://github.com/cailab-tamu/scTenifoldKnk/blob/master/DESCRIPTION",
-            "noteZh": "依赖与导出接口证据。",
+            "noteZh": "Dependency and exported-interface evidence.",
             "noteEn": "Dependency and exported-interface evidence."
           },
           {
             "label": "NAMESPACE",
             "url": "https://github.com/cailab-tamu/scTenifoldKnk/blob/master/NAMESPACE",
-            "noteZh": "依赖与导出接口证据。",
+            "noteZh": "Dependency and exported-interface evidence.",
             "noteEn": "Dependency and exported-interface evidence."
           }
         ]
@@ -604,21 +2004,21 @@
   },
   "failureModes": [
     {
-      "conditionZh": "输入对象状态与合同不一致",
+      "conditionZh": "The input object state is inconsistent with the contract",
       "conditionEn": "The input object state is inconsistent with the contract",
-      "recoveryZh": "要求用户修正 manifest，并显式声明对象状态而不是让 wrapper 自行猜测。",
+      "recoveryZh": "Require the user to correct the manifest and explicitly declare object state instead of letting the wrapper guess.",
       "recoveryEn": "Require the user to correct the manifest and explicitly declare object state instead of letting the wrapper guess."
     },
     {
-      "conditionZh": "Rscript 缺失",
+      "conditionZh": "Rscript is missing",
       "conditionEn": "Rscript is missing",
-      "recoveryZh": "返回 blocked_runtime_missing，并在目标环境安装所需运行时后重试。",
+      "recoveryZh": "Return blocked_runtime_missing and retry after installing the required runtime in the target environment.",
       "recoveryEn": "Return blocked_runtime_missing and retry after installing the required runtime in the target environment."
     },
     {
-      "conditionZh": "用户把 manuscript 复现分支当作核心方法输入要求",
+      "conditionZh": "The user treats manuscript reproduction branches as core-method input requirements",
       "conditionEn": "The user treats manuscript reproduction branches as core-method input requirements",
-      "recoveryZh": "在报告里显式标记复现分支，只把 WT-only 路径保留为最小执行合同。",
+      "recoveryZh": "Label reproduction branches explicitly in the report and keep the WT-only path as the minimum execution contract.",
       "recoveryEn": "Label reproduction branches explicitly in the report and keep the WT-only path as the minimum execution contract."
     }
   ],
@@ -626,14 +2026,33 @@
     {
       "label": "scTenifoldKnk: An efficient virtual knockout tool for gene function predictions via single-cell gene regulatory network perturbation paper",
       "url": "https://doi.org/10.1016/j.patter.2022.100434",
-      "noteZh": "主论文链接。",
+      "noteZh": "Primary paper link.",
       "noteEn": "Primary paper link."
     },
     {
       "label": "Official repository",
       "url": "https://github.com/cailab-tamu/scTenifoldKnk",
-      "noteZh": "官方代码仓库。",
+      "noteZh": "Official code repository.",
       "noteEn": "Official code repository."
     }
-  ]
+  ],
+  "evidenceSchema": {
+    "version": "1.0",
+    "required_fields": [
+      "evidence_id",
+      "source",
+      "source_type",
+      "priority_class",
+      "claim_type"
+    ],
+    "claim_types": [
+      "classification",
+      "perturbation",
+      "parameter",
+      "workflow_step",
+      "dag_edge",
+      "runtime_adapter"
+    ]
+  },
+  "schema_version": "paper2omics.contract.v1"
 }

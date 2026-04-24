@@ -1,4 +1,4 @@
-# Execution Contract Schema / 执行合同规范
+﻿# Execution Contract Schema
 
 Use this file before generating any child skill.
 

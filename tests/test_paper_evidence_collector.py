@@ -51,6 +51,35 @@ class PaperEvidenceCollectorTests(unittest.TestCase):
         self.assertEqual(payload["paper"]["sourceType"], "title_only")
         self.assertEqual(payload["paper"]["resolvedTitle"], "Example execution-contract paper")
 
+    def test_collects_local_markdown_full_text(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            paper_path = Path(tmp_dir) / "celloracle.md"
+            paper_path.write_text(
+                "\n".join(
+                    [
+                        "Dissecting cell identity via network inference and in silico gene perturbation",
+                        "",
+                        "CellOracle uses single-cell RNA-seq data, gene regulatory network inference,",
+                        "TF perturbation, and transition vector analysis."
+                    ]
+                ),
+                encoding="utf-8"
+            )
+
+            completed = self.run_node(
+                "--pdf-path",
+                str(paper_path),
+                "--paper-title",
+                "Dissecting cell identity via network inference and in silico gene perturbation"
+            )
+            self.assertEqual(completed.returncode, 0, msg=completed.stderr)
+
+            payload = json.loads(completed.stdout)
+            self.assertEqual(payload["paper"]["sourceType"], "pdf")
+            self.assertIn("CellOracle", payload["inferred"]["keywords"])
+            self.assertIn("TF perturbation", payload["inferred"]["analysisHints"])
+            self.assertIn("single-cell", payload["inferred"]["modalityHints"])
+
 
 if __name__ == "__main__":
     unittest.main()

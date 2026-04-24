@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>scTenifoldKnk: An efficient virtual knockout tool for gene function predictions via single-cell gene regulatory network perturbation</title>
+  <meta name="citation_title" content="scTenifoldKnk: An efficient virtual knockout tool for gene function predictions via single-cell gene regulatory network perturbation">
+  <meta name="citation_abstract" content="scTenifoldKnk predicts gene function from wild-type single-cell RNA-seq data by constructing single-cell gene regulatory networks, performing virtual knockout in silico, comparing perturbed and wild-type manifolds, and prioritizing differential regulation programs.">
+  <meta name="description" content="A single-cell virtual knockout workflow based on scGRN construction, tensor decomposition, manifold alignment, and differential regulation ranking.">
+</head>
+<body>
+  <article>
+    <section id="abstract">
+      <h2>Abstract</h2>
+      <p>
+        scTenifoldKnk is a virtual knockout method for single-cell RNA-seq analysis.
+        The method starts from wild-type expression profiles, constructs single-cell gene
+        regulatory networks, denoises them with tensor decomposition, removes the target
+        gene virtually, aligns wild-type and perturbed manifolds, and reports differential
+        regulation signals for downstream interpretation.
+      </p>
+    </section>
+    <section id="methods">
+      <h2>Methods</h2>
+      <p>
+        The core workflow assumes a WT count matrix with genes by cells, preservation of
+        raw counts, and explicit target-gene selection. The paper distinguishes the core
+        WT-only virtual knockout path from manuscript validation branches that compare real
+        WT and knockout experiments.
+      </p>
+    </section>
+  </article>
+</body>
+</html>

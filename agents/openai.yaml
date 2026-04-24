@@ -1,0 +1,7 @@
+interface:
+  display_name: "paper2omics"
+  short_description: "Turn paper and repo evidence into bilingual workflow summaries and execution-contract child skills."
+  default_prompt: "Use $paper2omics to collect paper and repository evidence, summarize the workflow bilingually, and scaffold or update a reusable execution-contract skill for this paper."
+
+policy:
+  allow_implicit_invocation: true

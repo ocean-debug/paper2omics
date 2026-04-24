@@ -1,0 +1,117 @@
+{
+  "generatedAt": "2026-04-23T15:50:27.190Z",
+  "repo": {
+    "owner": "cailab-tamu",
+    "repo": "scTenifoldKnk",
+    "githubUrl": "https://github.com/cailab-tamu/scTenifoldKnk",
+    "defaultBranch": "master",
+    "description": "R/MATLAB package to perform virtual knockout experiments on single-cell gene regulatory networks.",
+    "homepage": null
+  },
+  "counts": {
+    "totalFiles": 423,
+    "readmeFiles": 1,
+    "dependencyFiles": 2,
+    "entrypointFiles": 6,
+    "exampleFiles": 6
+  },
+  "selections": {
+    "readme": [
+      {
+        "path": "README.md",
+        "size": 4178,
+        "preview": "A R/MATLAB/Python package to perform virtual knockout experiments on single-cell gene regulatory networks. scTenifoldKnk is a machine learning workflow that performs virtual knockout experiments using single-cell RNA sequencing (scRNAseq) data from wild-type (WT) control samples as input. Constructs a single-cell gene regulatory network (scGRN) and knocks out a target gene from the adjacency matrix of the WT scGRN by setting the gene's outdegree edges to zero.",
+        "githubUrl": "https://github.com/cailab-tamu/scTenifoldKnk/blob/master/README.md"
+      }
+    ],
+    "dependencies": [
+      {
+        "path": "DESCRIPTION",
+        "size": 2048,
+        "preview": "Package: scTenifoldKnk\nType: Package\nTitle: In-Silico Knockout Experiments from Single-Cell Gene Regulatory Networks\nVersion: 1.0.3",
+        "githubUrl": "https://github.com/cailab-tamu/scTenifoldKnk/blob/master/DESCRIPTION"
+      },
+      {
+        "path": "NAMESPACE",
+        "size": 705,
+        "preview": "export(plotKO)\nexport(scTenifoldKnk)\nimportFrom(Matrix,Matrix)\nimportFrom(scTenifoldNet,makeNetworks)\nimportFrom(scTenifoldNet,manifoldAlignment)\nimportFrom(scTenifoldNet,tensorDecomposition)",
+        "githubUrl": "https://github.com/cailab-tamu/scTenifoldKnk/blob/master/NAMESPACE"
+      }
+    ],
+    "entrypoints": [
+      {
+        "path": "R/dRegulation.R",
+        "size": 1815,
+        "preview": "dRegulation <- function(manifoldOutput, gKO) { ... }",
+        "githubUrl": "https://github.com/cailab-tamu/scTenifoldKnk/blob/master/R/dRegulation.R"
+      },
+      {
+        "path": "R/plotKO.R",
+        "size": 7596,
+        "preview": "Plot a KO-centered subnetwork and annotate with enrichment from the output of scTenifoldKnk.",
+        "githubUrl": "https://github.com/cailab-tamu/scTenifoldKnk/blob/master/R/plotKO.R"
+      },
+      {
+        "path": "R/qFilter.R",
+        "size": 140,
+        "preview": "qFilter <- function(X, q = 0) { X[abs(X) < stats::quantile(abs(X), 0.95)] <- 0 }",
+        "githubUrl": "https://github.com/cailab-tamu/scTenifoldKnk/blob/master/R/qFilter.R"
+      },
+      {
+        "path": "R/scQC.R",
+        "size": 1405,
+        "preview": "scQC <- function(X, mtThreshold = 0.1, minLSize = 1000) { if (inherits(X, \"Seurat\")) { ... } }",
+        "githubUrl": "https://github.com/cailab-tamu/scTenifoldKnk/blob/master/R/scQC.R"
+      },
+      {
+        "path": "R/scTenifoldKnk.R",
+        "size": 6481,
+        "preview": "scTenifoldKnk <- function(countMatrix, gKO, qc = TRUE, qc_minLSize = 1000, qc_mtThreshold = 0.1) { ... }",
+        "githubUrl": "https://github.com/cailab-tamu/scTenifoldKnk/blob/master/R/scTenifoldKnk.R"
+      },
+      {
+        "path": "R/strictDirection.R",
+        "size": 176,
+        "preview": "strictDirection <- function(X, lambda = 1) { ... }",
+        "githubUrl": "https://github.com/cailab-tamu/scTenifoldKnk/blob/master/R/strictDirection.R"
+      }
+    ],
+    "examples": [
+      {
+        "path": "inst/manuscript/AHR/Code/Preenterocytes_DataPreProcessing.R",
+        "size": 1572,
+        "preview": "library(Matrix)\nlibrary(scTenifoldNet)\n# WT <- readMM('Preenterocytes_WT.mtx')\n# KO <- readMM('Preenterocytes_KO.mtx')\n# O <- scTenifoldNet(WT, KO, qc_minLibSize = 0)",
+        "githubUrl": "https://github.com/cailab-tamu/scTenifoldKnk/blob/master/inst/manuscript/AHR/Code/Preenterocytes_DataPreProcessing.R"
+      },
+      {
+        "path": "inst/manuscript/AHR/Code/Preenterocytes_DataProcessing.R",
+        "size": 9155,
+        "preview": "library(Matrix)\nlibrary(Seurat)\nlibrary(harmony)\nDR <- O$diffRegulation\nwrite.csv(O$diffRegulation, '../Results/drAHR.csv')",
+        "githubUrl": "https://github.com/cailab-tamu/scTenifoldKnk/blob/master/inst/manuscript/AHR/Code/Preenterocytes_DataProcessing.R"
+      }
+    ]
+  },
+  "pathIndex": {
+    "dependencyFiles": [
+      "DESCRIPTION",
+      "NAMESPACE"
+    ],
+    "entrypointFiles": [
+      "R/dRegulation.R",
+      "R/plotKO.R",
+      "R/qFilter.R",
+      "R/scQC.R",
+      "R/scTenifoldKnk.R",
+      "R/strictDirection.R"
+    ],
+    "exampleFiles": [
+      "inst/manuscript/AHR/Code/Preenterocytes_DataPreProcessing.R",
+      "inst/manuscript/AHR/Code/Preenterocytes_DataProcessing.R"
+    ]
+  },
+  "notes": [
+    "Treat README as a navigation aid, not the final source of truth.",
+    "Prefer the paper plus main implementation for core workflow claims.",
+    "Treat manuscript and example files as reproduction evidence."
+  ]
+}

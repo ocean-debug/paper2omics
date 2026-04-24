@@ -1,0 +1,639 @@
+{
+  "skillName": "sc-tenifold-knk",
+  "displayName": "scTenifoldKnk Execution Contract",
+  "paperTitle": "scTenifoldKnk: An efficient virtual knockout tool for gene function predictions via single-cell gene regulatory network perturbation",
+  "paperUrl": "https://doi.org/10.1016/j.patter.2022.100434",
+  "githubUrl": "https://github.com/cailab-tamu/scTenifoldKnk",
+  "metadata": {
+    "version": "0.3.0",
+    "author": "OpenAI Codex",
+    "domain": "single-cell",
+    "analysis_type": "virtual-knockout",
+    "primary_tool": "scTenifoldKnk",
+    "tool_runtime": "r",
+    "dependencies": [
+      "python>=3.10",
+      "R",
+      "scTenifoldKnk",
+      "scTenifoldNet",
+      "Matrix",
+      "Seurat"
+    ],
+    "trigger_keywords": [
+      "scTenifoldKnk",
+      "virtual knockout",
+      "in-silico knockout",
+      "single-cell",
+      "scRNA-seq",
+      "gene regulatory network"
+    ],
+    "allowed_extra_flags": [
+      "--input",
+      "--out",
+      "--config",
+      "--dry-run",
+      "--resume"
+    ],
+    "legacy_aliases": [
+      "sctenifoldknk",
+      "sc-tenifold-knk",
+      "sc_tenifold_knk"
+    ],
+    "param_hints": {
+      "input_orientation": {
+        "required": true,
+        "tip": "genes_by_cells"
+      },
+      "knockout_gene": {
+        "required": true,
+        "tip": "Gene symbol that remains present after filtering."
+      },
+      "analysis_mode": {
+        "required": true,
+        "tip": "core_wt_only"
+      }
+    }
+  },
+  "routing": {
+    "why_this_exists": {
+      "zh": "这个 skill 把 scTenifoldKnk 的论文和官方仓库整理成可路由、可校验、可报告的执行合同，用于在 WT 单细胞表达矩阵上执行虚拟敲除分析。",
+      "en": "This skill turns scTenifoldKnk into a routable, validated, and report-producing execution contract for virtual knockout on WT single-cell expression matrices."
+    },
+    "when_to_use": [
+      {
+        "zh": "当任务是从 WT scRNA-seq 矩阵出发，对候选基因执行虚拟敲除并输出扰动或差异调控结果时使用。",
+        "en": "Use when the task starts from a WT scRNA-seq matrix and needs virtual knockout plus perturbation or differential-regulation outputs."
+      },
+      {
+        "zh": "当需要区分核心 WT-only 工作流与仓库里的 manuscript 复现实例时使用。",
+        "en": "Use when the user needs the core WT-only workflow clearly separated from manuscript-style reproduction branches."
+      }
+    ],
+    "when_not_to_use": [
+      {
+        "zh": "不要用于真实 CRISPR KO 实验设计、通用差异表达分析或多样本整合。",
+        "en": "Do not use for real CRISPR KO experimental design, generic differential expression, or multi-sample integration."
+      },
+      {
+        "zh": "不要在没有 WT 输入矩阵的情况下使用。",
+        "en": "Do not use when no WT input matrix is available."
+      }
+    ],
+    "route_elsewhere": [
+      {
+        "zh": "如果任务还是 FASTQ 到表达矩阵的上游处理，路由到比对或定量 skill。",
+        "en": "If the task is still upstream FASTQ-to-matrix processing, route to an alignment or quantification skill."
+      },
+      {
+        "zh": "如果任务是 bulk RNA-seq 差异表达，路由到 bulk differential-expression skill。",
+        "en": "If the task is bulk RNA-seq differential expression, route to a bulk differential-expression skill."
+      }
+    ]
+  },
+  "inputContract": {
+    "formats": [
+      {
+        "name": "input_manifest.json",
+        "zh": "推荐输入是 JSON manifest，用来声明矩阵路径和对象状态。",
+        "en": "The preferred input is a JSON manifest that declares matrix paths and object state."
+      },
+      {
+        "name": "matrix_market_or_csv",
+        "zh": "表达矩阵可以是 Matrix Market 或 CSV，但 manifest 必须声明方向和是否为原始计数。",
+        "en": "Expression matrices may be Matrix Market or CSV, but the manifest must state orientation and whether they are raw counts."
+      }
+    ],
+    "required_manifest_fields": [
+      "inputs.wt_matrix.path",
+      "inputs.wt_matrix.orientation",
+      "inputs.wt_matrix.normalization",
+      "inputs.knockout_gene",
+      "inputs.analysis_mode"
+    ],
+    "file_fields": [
+      {
+        "path": "inputs.wt_matrix.path",
+        "required": true,
+        "zh": "WT 表达矩阵路径必须存在。",
+        "en": "The WT expression matrix path must exist."
+      }
+    ],
+    "state_requirements": [
+      {
+        "path": "inputs.wt_matrix.orientation",
+        "required": true,
+        "equals": "genes_by_cells",
+        "zh": "WT 矩阵必须是基因在行、细胞在列。",
+        "en": "The WT matrix must be organized as genes in rows and cells in columns."
+      },
+      {
+        "path": "inputs.wt_matrix.normalization",
+        "required": true,
+        "one_of": [
+          "raw_counts",
+          "unnormalized_counts"
+        ],
+        "zh": "核心输入应为原始或未标准化计数，以免静默跳过方法要求的前置质量控制。",
+        "en": "Core input should remain raw or otherwise unnormalized so method-level preflight assumptions are not silently bypassed."
+      },
+      {
+        "path": "inputs.wt_matrix.has_gene_names",
+        "required": true,
+        "equals": true,
+        "zh": "矩阵必须保留基因名，否则无法验证待敲除基因是否存在。",
+        "en": "The matrix must retain gene names so the wrapper can verify that the knockout gene exists."
+      },
+      {
+        "path": "inputs.analysis_mode",
+        "required": true,
+        "one_of": [
+          "core_wt_only",
+          "paper_reproduction"
+        ],
+        "zh": "必须显式声明是核心 WT-only 路径还是论文复现路径。",
+        "en": "The manifest must explicitly declare whether this is the core WT-only path or the paper-reproduction path."
+      }
+    ]
+  },
+  "parameterPolicy": {
+    "required_user_decisions": [
+      {
+        "zh": "必须提供待敲除的基因符号，并确认该基因在过滤后仍保留。",
+        "en": "The knockout gene must be provided and confirmed to remain present after filtering."
+      },
+      {
+        "zh": "必须确认本次运行是核心 WT-only 分析还是论文复现分支。",
+        "en": "The user must confirm whether the run targets the core WT-only analysis or a paper-reproduction branch."
+      }
+    ],
+    "user_required": [
+      {
+        "name": "knockout_gene",
+        "description": {
+          "zh": "目标敲除基因。",
+          "en": "Target knockout gene."
+        },
+        "sources": [
+          "config.analysis.knockout_gene",
+          "manifest.inputs.knockout_gene"
+        ],
+        "rationale": {
+          "zh": "这决定哪个基因的出边会被置零，不能自动猜测。",
+          "en": "This determines which gene loses its outgoing edges and must not be guessed."
+        }
+      },
+      {
+        "name": "analysis_mode",
+        "description": {
+          "zh": "核心路径还是论文复现分支。",
+          "en": "Core path versus paper-reproduction branch."
+        },
+        "sources": [
+          "config.analysis.analysis_mode",
+          "manifest.inputs.analysis_mode"
+        ],
+        "rationale": {
+          "zh": "它决定是否允许 manuscript 里的真实 WT/KO 对照分支进入执行计划。",
+          "en": "It determines whether real WT/KO manuscript branches may enter the execution plan."
+        }
+      }
+    ],
+    "auto_detected": [
+      {
+        "name": "r_runtime_available",
+        "description": {
+          "zh": "Rscript 是否可用。",
+          "en": "Whether Rscript is available."
+        },
+        "sources": [
+          "runtime.targets.Rscript.available"
+        ],
+        "fallback_value": false,
+        "rationale": {
+          "zh": "native execution 依赖 Rscript。",
+          "en": "Native execution depends on Rscript."
+        }
+      },
+      {
+        "name": "wt_input_normalization",
+        "description": {
+          "zh": "从 manifest 读取 WT 输入矩阵状态。",
+          "en": "Read the WT input matrix state from the manifest."
+        },
+        "sources": [
+          "manifest.inputs.wt_matrix.normalization"
+        ],
+        "fallback_value": "unknown",
+        "rationale": {
+          "zh": "wrapper 不能静默假设输入已经标准化或未标准化。",
+          "en": "The wrapper must not silently assume whether the input is normalized."
+        }
+      }
+    ],
+    "literature_defaults": [
+      {
+        "name": "edge_weight_quantile",
+        "value": "0.95",
+        "rationale": {
+          "zh": "源码中用 quantile(abs(X), 0.95) 过滤低权重边。",
+          "en": "The source code uses quantile(abs(X), 0.95) to filter low-weight edges."
+        }
+      },
+      {
+        "name": "direction_lambda",
+        "value": "1",
+        "rationale": {
+          "zh": "源码中的方向约束函数默认使用 lambda = 1。",
+          "en": "The directionality helper defaults to lambda = 1 in the source code."
+        }
+      }
+    ],
+    "wrapper_defaults": [
+      {
+        "name": "result_bundle_version",
+        "value": "1.0",
+        "rationale": {
+          "zh": "统一结果目录结构，便于 smoke test、报告重建和复现记录。",
+          "en": "A fixed result bundle keeps smoke tests, report regeneration, and reproducibility records consistent."
+        }
+      },
+      {
+        "name": "dry_run_mode",
+        "value": "true",
+        "rationale": {
+          "zh": "默认先验证合同与运行时，再决定是否真正消耗集群资源。",
+          "en": "Default to validating the contract and runtime before executing the full analysis."
+        }
+      }
+    ],
+    "decision_rules": [
+      {
+        "titleZh": "优先走核心 WT-only 路径",
+        "titleEn": "Prefer the core WT-only path",
+        "detailsZh": "如果只有 WT 输入，就只生成虚拟敲除核心路径，不把 manuscript 复现脚本并入最小执行合同。",
+        "detailsEn": "If only WT input is available, keep the workflow on the virtual-knockout core path and do not merge manuscript reproduction scripts into the minimum contract."
+      },
+      {
+        "titleZh": "运行时缺失时阻断 native execution",
+        "titleEn": "Block native execution when a required runtime is missing",
+        "detailsZh": "如果 Rscript 不可用，返回结构化 blocked 状态，而不是假装方法已经执行成功。",
+        "detailsEn": "If Rscript is unavailable, emit a structured blocked status instead of pretending the method already ran."
+      }
+    ]
+  },
+  "executionContract": {
+    "runtime_targets": [
+      {
+        "name": "python",
+        "executable": "python",
+        "required": true,
+        "zh": "Python orchestrator 运行时。",
+        "en": "Python orchestrator runtime."
+      },
+      {
+        "name": "Rscript",
+        "executable": "Rscript",
+        "required": true,
+        "zh": "scTenifoldKnk native execution 运行时。",
+        "en": "scTenifoldKnk native execution runtime."
+      }
+    ],
+    "workflow_steps": [
+      {
+        "titleZh": "路由并校验输入 manifest",
+        "titleEn": "Route and validate the input manifest",
+        "detailsZh": "先确认任务属于 WT-only virtual knockout，再检查矩阵方向、计数状态和 knockout gene 字段。",
+        "detailsEn": "First confirm that the task belongs to WT-only virtual knockout, then validate matrix orientation, count-state assumptions, and knockout-gene fields.",
+        "layer": "core",
+        "evidence": [
+          "README.md",
+          "R/dRegulation.R",
+          "R/plotKO.R"
+        ]
+      },
+      {
+        "titleZh": "规划核心 virtual knockout 路径",
+        "titleEn": "Plan the core virtual-knockout path",
+        "detailsZh": "按源码证据组织 QC、网络构建、方向约束、扰动模拟以及差异调控评分。",
+        "detailsEn": "Use the implementation evidence to organize QC, network construction, directionality constraints, perturbation simulation, and differential-regulation scoring.",
+        "layer": "core",
+        "evidence": [
+          "R/dRegulation.R",
+          "R/plotKO.R",
+          "R/qFilter.R",
+          "R/scQC.R"
+        ]
+      },
+      {
+        "titleZh": "显式隔离 manuscript 复现分支",
+        "titleEn": "Explicitly isolate manuscript reproduction branches",
+        "detailsZh": "只有在分析模式显式允许时，才把仓库中的 manuscript 或 example 分支纳入复现计划。",
+        "detailsEn": "Only allow manuscript or example branches into the plan when the analysis mode explicitly enables reproduction.",
+        "layer": "reproduction",
+        "evidence": [
+          "inst/manuscript/AHR/Code/Preenterocytes_DataPreProcessing.R",
+          "inst/manuscript/AHR/Code/Preenterocytes_DataProcessing.R"
+        ]
+      },
+      {
+        "titleZh": "生成结果合同与报告",
+        "titleEn": "Assemble the result contract and report",
+        "detailsZh": "无论是否 dry-run，都要输出标准 bundle、参数解析、运行时探测、QC 摘要和 caveats。",
+        "detailsEn": "Whether or not the run is a dry-run, emit the standard bundle, parameter resolution, runtime probe, QC summary, and caveats.",
+        "layer": "wrapper",
+        "evidence": [
+          "README.md",
+          "DESCRIPTION"
+        ]
+      }
+    ],
+    "command_templates": [
+      "echo Planning scTenifoldKnk",
+      "echo Manifest: {manifest_path}",
+      "echo Output directory: {out_dir}"
+    ],
+    "required_outputs": [
+      "qc_summary",
+      "network_models",
+      "perturbation_summary",
+      "differential_regulation"
+    ],
+    "supports_native_run": false
+  },
+  "qcContract": {
+    "rules": [
+      {
+        "metric": "input_contract_integrity",
+        "zh": "检查 WT 输入矩阵路径、方向、计数状态和 knockout gene 是否满足合同。",
+        "en": "Check whether the WT matrix path, orientation, count state, and knockout gene satisfy the contract.",
+        "passZh": "输入合同通过，可以进入执行规划。",
+        "passEn": "The input contract passes and execution planning may continue.",
+        "warnZh": "dry-run 仅完成预检，尚未形成方法级 QC 结论。",
+        "warnEn": "The dry-run only completed preflight checks and has not produced method-level QC conclusions.",
+        "failZh": "输入违反合同，结果不能当作可靠分析执行。",
+        "failEn": "The input violates the contract and the output must not be treated as a reliable executed analysis."
+      },
+      {
+        "metric": "single_cell_preflight",
+        "zh": "检查单细胞输入是否保留基因名，并避免把已标准化矩阵冒充原始计数。",
+        "en": "Check that gene names are retained and that a normalized matrix is not misrepresented as raw counts.",
+        "passZh": "对象状态满足单细胞扰动工作流前提。",
+        "passEn": "The object state satisfies the prerequisites for a single-cell perturbation workflow.",
+        "warnZh": "对象状态部分依赖 manifest 声明，仍需在正式运行前核实。",
+        "warnEn": "Part of the object state still depends on manifest declarations and should be verified before a full run.",
+        "failZh": "对象状态与方法要求不一致。",
+        "failEn": "The object state is inconsistent with the method requirements."
+      },
+      {
+        "metric": "runtime_readiness",
+        "requires_runtime": true,
+        "zh": "检查 Python 和 Rscript 是否可用。",
+        "en": "Check whether Python and Rscript are available.",
+        "passZh": "运行时已就绪。",
+        "passEn": "Required runtimes are ready.",
+        "warnZh": "dry-run 可以继续，但 native execution 尚未真正消耗方法运行时。",
+        "warnEn": "The dry-run may continue, but native execution has not yet consumed the method runtime.",
+        "failZh": "必需运行时缺失，应返回 blocked 状态。",
+        "failEn": "A required runtime is missing and the wrapper should return a blocked status."
+      }
+    ],
+    "validation_scenarios": [
+      {
+        "zh": "最小 smoke test：manifest 有效、dry-run 成功、bundle 完整。",
+        "en": "Minimum smoke test: valid manifest, successful dry-run, and a complete result bundle."
+      },
+      {
+        "zh": "缺失运行时测试：模拟 Rscript 缺失并返回 blocked_runtime_missing。",
+        "en": "Missing-runtime test: simulate a missing Rscript and return blocked_runtime_missing."
+      }
+    ],
+    "interpretation_boundary": [
+      {
+        "status": "pass",
+        "zh": "通过仅表示合同和预检查通过，不等同于生物学结论已经成立。",
+        "en": "A pass only means the contract and preflight checks succeeded; it does not mean the biological conclusion is already established."
+      },
+      {
+        "status": "warn",
+        "zh": "警告表示结果可用于规划或报告，但必须保留 caveat。",
+        "en": "A warning means the output may guide planning or reporting, but caveats must remain visible."
+      },
+      {
+        "status": "fail",
+        "zh": "失败表示结果不能写成可信结论。",
+        "en": "A failure means the output must not be written up as a reliable conclusion."
+      }
+    ]
+  },
+  "outputBundle": {
+    "required_paths": [
+      "README.md",
+      "report.md",
+      "result.json",
+      "tables",
+      "figures",
+      "figure_data",
+      "reproducibility",
+      "logs"
+    ],
+    "result_fields": [
+      "status",
+      "skill_name",
+      "paper_title",
+      "runtime_probe",
+      "input_validation",
+      "parameter_resolution",
+      "qc_summary",
+      "artifacts",
+      "caveats",
+      "citations_used"
+    ],
+    "bundle_notes": [
+      {
+        "zh": "即使是 dry-run，也必须产出完整目录结构和机器可读 result.json。",
+        "en": "Even a dry-run must emit the full directory structure and a machine-readable result.json."
+      },
+      {
+        "zh": "不要把 manuscript 复现实例的产物静默写成核心方法已经得出的结论。",
+        "en": "Do not silently rewrite manuscript-reproduction artifacts as if they were core-method conclusions."
+      }
+    ]
+  },
+  "reproducibilityContract": {
+    "capture_items": [
+      {
+        "zh": "输入 manifest 路径和关键状态字段。",
+        "en": "Input manifest path and key state fields."
+      },
+      {
+        "zh": "参数解析来源和默认值理由。",
+        "en": "Parameter-resolution sources and default rationales."
+      },
+      {
+        "zh": "运行时探测结果、计划命令和安装记录。",
+        "en": "Runtime probe results, planned commands, and installation records."
+      }
+    ],
+    "install_policy": [
+      {
+        "zh": "如果目标运行环境缺少依赖，只在该环境内安装，并把命令写入 reproducibility 目录。",
+        "en": "If the target runtime environment lacks dependencies, install them only inside that environment and record the commands under reproducibility."
+      }
+    ]
+  },
+  "testContract": {
+    "expected_status": "dry_run_ready",
+    "demo_input_manifest": {
+      "inputs": {
+        "wt_matrix": {
+          "path": "wt_counts.csv",
+          "orientation": "genes_by_cells",
+          "normalization": "raw_counts",
+          "has_gene_names": true
+        },
+        "knockout_gene": "AHR",
+        "analysis_mode": "core_wt_only"
+      }
+    },
+    "demo_files": {
+      "wt_counts.csv": "gene,cell_1,cell_2\nAHR,10,8\nGENE_B,5,4\nGENE_C,7,6\n"
+    },
+    "smoke_scenarios": [
+      {
+        "zh": "dry-run 生成完整 bundle。",
+        "en": "The dry-run generates the full bundle."
+      },
+      {
+        "zh": "缺失 report.md 时 validate-output 返回失败。",
+        "en": "validate-output fails when report.md is missing."
+      }
+    ]
+  },
+  "references": {
+    "methods": [
+      {
+        "title": "Core implementation / 核心实现",
+        "items": [
+          {
+            "label": "R/dRegulation.R",
+            "url": "https://github.com/cailab-tamu/scTenifoldKnk/blob/master/R/dRegulation.R",
+            "noteZh": "差异调控或统计评分实现。",
+            "noteEn": "Differential-regulation or statistical-scoring implementation."
+          },
+          {
+            "label": "R/plotKO.R",
+            "url": "https://github.com/cailab-tamu/scTenifoldKnk/blob/master/R/plotKO.R",
+            "noteZh": "可视化或下游结果展示实现。",
+            "noteEn": "Visualization or downstream result-display implementation."
+          },
+          {
+            "label": "R/qFilter.R",
+            "url": "https://github.com/cailab-tamu/scTenifoldKnk/blob/master/R/qFilter.R",
+            "noteZh": "主实现文件。",
+            "noteEn": "Main implementation file."
+          },
+          {
+            "label": "R/scQC.R",
+            "url": "https://github.com/cailab-tamu/scTenifoldKnk/blob/master/R/scQC.R",
+            "noteZh": "质量控制实现。",
+            "noteEn": "Quality-control implementation."
+          },
+          {
+            "label": "R/scTenifoldKnk.R",
+            "url": "https://github.com/cailab-tamu/scTenifoldKnk/blob/master/R/scTenifoldKnk.R",
+            "noteZh": "主实现文件。",
+            "noteEn": "Main implementation file."
+          },
+          {
+            "label": "R/strictDirection.R",
+            "url": "https://github.com/cailab-tamu/scTenifoldKnk/blob/master/R/strictDirection.R",
+            "noteZh": "主实现文件。",
+            "noteEn": "Main implementation file."
+          }
+        ]
+      }
+    ],
+    "papers": [
+      {
+        "title": "Paper evidence / 论文证据",
+        "items": [
+          {
+            "label": "scTenifoldKnk: An efficient virtual knockout tool for gene function predictions via single-cell gene regulatory network perturbation",
+            "url": "https://doi.org/10.1016/j.patter.2022.100434",
+            "noteZh": "论文摘要证据：scTenifoldKnk predicts gene function from wild-type single-cell RNA-seq data by constructing single-cell gene regulatory networks, performing virtual knockout in silico, comparing perturbed and wild-type manifolds, and prioritizing differential regulation programs.",
+            "noteEn": "Paper abstract evidence: scTenifoldKnk predicts gene function from wild-type single-cell RNA-seq data by constructing single-cell gene regulatory networks, performing virtual knockout in silico, comparing perturbed and wild-type manifolds, and prioritizing differential regulation programs."
+          }
+        ]
+      },
+      {
+        "title": "Repository and reproduction evidence / 仓库与复现证据",
+        "items": [
+          {
+            "label": "README.md",
+            "url": "https://github.com/cailab-tamu/scTenifoldKnk/blob/master/README.md",
+            "noteZh": "仓库总览与输入输出说明。",
+            "noteEn": "Repository overview plus input and output guidance."
+          },
+          {
+            "label": "inst/manuscript/AHR/Code/Preenterocytes_DataPreProcessing.R",
+            "url": "https://github.com/cailab-tamu/scTenifoldKnk/blob/master/inst/manuscript/AHR/Code/Preenterocytes_DataPreProcessing.R",
+            "noteZh": "复现实例或 manuscript 分支证据。",
+            "noteEn": "Reproduction example or manuscript-branch evidence."
+          },
+          {
+            "label": "inst/manuscript/AHR/Code/Preenterocytes_DataProcessing.R",
+            "url": "https://github.com/cailab-tamu/scTenifoldKnk/blob/master/inst/manuscript/AHR/Code/Preenterocytes_DataProcessing.R",
+            "noteZh": "复现实例或 manuscript 分支证据。",
+            "noteEn": "Reproduction example or manuscript-branch evidence."
+          },
+          {
+            "label": "DESCRIPTION",
+            "url": "https://github.com/cailab-tamu/scTenifoldKnk/blob/master/DESCRIPTION",
+            "noteZh": "依赖与导出接口证据。",
+            "noteEn": "Dependency and exported-interface evidence."
+          },
+          {
+            "label": "NAMESPACE",
+            "url": "https://github.com/cailab-tamu/scTenifoldKnk/blob/master/NAMESPACE",
+            "noteZh": "依赖与导出接口证据。",
+            "noteEn": "Dependency and exported-interface evidence."
+          }
+        ]
+      }
+    ]
+  },
+  "failureModes": [
+    {
+      "conditionZh": "输入对象状态与合同不一致",
+      "conditionEn": "The input object state is inconsistent with the contract",
+      "recoveryZh": "要求用户修正 manifest，并显式声明对象状态而不是让 wrapper 自行猜测。",
+      "recoveryEn": "Require the user to correct the manifest and explicitly declare object state instead of letting the wrapper guess."
+    },
+    {
+      "conditionZh": "Rscript 缺失",
+      "conditionEn": "Rscript is missing",
+      "recoveryZh": "返回 blocked_runtime_missing，并在目标环境安装所需运行时后重试。",
+      "recoveryEn": "Return blocked_runtime_missing and retry after installing the required runtime in the target environment."
+    },
+    {
+      "conditionZh": "用户把 manuscript 复现分支当作核心方法输入要求",
+      "conditionEn": "The user treats manuscript reproduction branches as core-method input requirements",
+      "recoveryZh": "在报告里显式标记复现分支，只把 WT-only 路径保留为最小执行合同。",
+      "recoveryEn": "Label reproduction branches explicitly in the report and keep the WT-only path as the minimum execution contract."
+    }
+  ],
+  "citations": [
+    {
+      "label": "scTenifoldKnk: An efficient virtual knockout tool for gene function predictions via single-cell gene regulatory network perturbation paper",
+      "url": "https://doi.org/10.1016/j.patter.2022.100434",
+      "noteZh": "主论文链接。",
+      "noteEn": "Primary paper link."
+    },
+    {
+      "label": "Official repository",
+      "url": "https://github.com/cailab-tamu/scTenifoldKnk",
+      "noteZh": "官方代码仓库。",
+      "noteEn": "Official code repository."
+    }
+  ]
+}

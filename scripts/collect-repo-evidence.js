@@ -5,6 +5,13 @@ const path = require("node:path");
 
 const DEFAULT_MAX_FILES = 8;
 const DEFAULT_MAX_PREVIEW_CHARS = 1200;
+const DEFAULT_FETCH_TIMEOUT_MS = 15000;
+const DEFAULT_FETCH_RETRIES = 2;
+const RETRYABLE_STATUS = new Set([408, 425, 429, 500, 502, 503, 504]);
+let fetchConfig = {
+  timeoutMs: DEFAULT_FETCH_TIMEOUT_MS,
+  retries: DEFAULT_FETCH_RETRIES
+};
 
 function fail(message) {
   console.error(`ERROR: ${message}`);
@@ -34,6 +41,22 @@ function parseArgs(argv) {
   return args;
 }
 
+function parseNonNegativeInteger(name, value, fallback) {
+  if (value === undefined || value === null || value === "") {
+    return fallback;
+  }
+  const parsed = Number.parseInt(String(value), 10);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    fail(`Expected --${name} to be a non-negative integer, received: ${value}`);
+  }
+  return parsed;
+}
+
+function isAllowedGithubHost(hostname) {
+  const normalized = String(hostname || "").toLowerCase();
+  return normalized === "github.com" || normalized.endsWith(".github.com");
+}
+
 function parseGithubUrl(input) {
   let url;
   try {
@@ -42,8 +65,8 @@ function parseGithubUrl(input) {
     fail(`Invalid GitHub URL: ${input}`);
   }
 
-  if (!url.hostname.endsWith("github.com")) {
-    fail(`Expected a github.com URL, received: ${input}`);
+  if (!isAllowedGithubHost(url.hostname)) {
+    fail(`Expected github.com or *.github.com URL, received: ${input}`);
   }
 
   const segments = url.pathname.replace(/\.git$/, "").split("/").filter(Boolean);
@@ -71,14 +94,61 @@ function buildHeaders(token) {
   return headers;
 }
 
-async function getJson(url, token) {
-  const response = await fetch(url, { headers: buildHeaders(token) });
-  if (!response.ok) {
-    const body = await response.text();
-    fail(`GitHub API request failed (${response.status}) for ${url}: ${body.slice(0, 300)}`);
-  }
+function sleep(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
 
-  return response.json();
+async function fetchWithTimeout(url, options, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => {
+    controller.abort();
+  }, timeoutMs);
+
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+  } catch (error) {
+    if (error && error.name === "AbortError") {
+      throw new Error(`Request timed out after ${timeoutMs}ms.`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function getJson(url, token) {
+  let lastError = null;
+  for (let attempt = 0; attempt <= fetchConfig.retries; attempt += 1) {
+    try {
+      const response = await fetchWithTimeout(
+        url,
+        { headers: buildHeaders(token) },
+        fetchConfig.timeoutMs
+      );
+      if (!response.ok) {
+        const body = await response.text();
+        const message = `GitHub API request failed (${response.status}) for ${url}: ${body.slice(0, 300)}`;
+        if (!RETRYABLE_STATUS.has(response.status) || attempt >= fetchConfig.retries) {
+          fail(message);
+        }
+        await sleep(250 * (attempt + 1));
+        continue;
+      }
+      return response.json();
+    } catch (error) {
+      lastError = error;
+      if (attempt >= fetchConfig.retries) {
+        fail(`GitHub API request failed for ${url}: ${error.message}`);
+      }
+      await sleep(250 * (attempt + 1));
+    }
+  }
+  fail(`GitHub API request failed for ${url}: ${lastError ? lastError.message : "unknown error"}`);
 }
 
 function isDependencyFile(filePath) {
@@ -574,6 +644,10 @@ async function main() {
   const tokenEnv = args["token-env"] || "GITHUB_TOKEN";
   const token = process.env[tokenEnv] || "";
   const localPath = args["local-path"] ? path.resolve(args["local-path"]) : "";
+  fetchConfig = {
+    timeoutMs: parseNonNegativeInteger("fetch-timeout-ms", args["fetch-timeout-ms"], DEFAULT_FETCH_TIMEOUT_MS),
+    retries: parseNonNegativeInteger("fetch-retries", args["fetch-retries"], DEFAULT_FETCH_RETRIES)
+  };
 
   const { owner, repo, githubUrl: normalizedGithubUrl } = parseGithubUrl(githubUrl);
 

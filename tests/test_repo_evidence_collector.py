@@ -19,6 +19,14 @@ class RepoEvidenceCollectorTests(unittest.TestCase):
             text=True
         )
 
+    def test_rejects_deceptive_non_github_host(self):
+        completed = self.run_node(
+            "--github-url",
+            "https://notgithub.com/example/DemoOmics"
+        )
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("Expected github.com or *.github.com URL", completed.stderr)
+
     def test_collects_local_repo_metadata_without_github_api(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             root = Path(tmp_dir)

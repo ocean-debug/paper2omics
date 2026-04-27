@@ -5,6 +5,9 @@ const path = require("node:path");
 
 const DEFAULT_MAX_TEXT_CHARS = 6000;
 const DEFAULT_SNIPPET_CHARS = 1200;
+const DEFAULT_FETCH_TIMEOUT_MS = 15000;
+const DEFAULT_FETCH_RETRIES = 2;
+const RETRYABLE_STATUS = new Set([408, 425, 429, 500, 502, 503, 504]);
 
 function fail(message) {
   console.error(`ERROR: ${message}`);
@@ -32,6 +35,74 @@ function parseArgs(argv) {
   }
 
   return args;
+}
+
+function parseNonNegativeInteger(name, value, fallback) {
+  if (value === undefined || value === null || value === "") {
+    return fallback;
+  }
+  const parsed = Number.parseInt(String(value), 10);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    fail(`Expected --${name} to be a non-negative integer, received: ${value}`);
+  }
+  return parsed;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+async function fetchWithTimeout(url, options, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => {
+    controller.abort();
+  }, timeoutMs);
+
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+  } catch (error) {
+    if (error && error.name === "AbortError") {
+      throw new Error(`Request timed out after ${timeoutMs}ms.`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function fetchText(url, options = {}) {
+  const timeoutMs = parseNonNegativeInteger("fetch-timeout-ms", options.timeoutMs, DEFAULT_FETCH_TIMEOUT_MS);
+  const retries = parseNonNegativeInteger("fetch-retries", options.retries, DEFAULT_FETCH_RETRIES);
+  const headers = options.headers || {};
+
+  let lastError = null;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      const response = await fetchWithTimeout(url, { headers }, timeoutMs);
+      if (!response.ok) {
+        const body = await response.text();
+        const message = `Failed to fetch article URL (${response.status}): ${url}; ${body.slice(0, 300)}`;
+        if (!RETRYABLE_STATUS.has(response.status) || attempt >= retries) {
+          fail(message);
+        }
+        await sleep(250 * (attempt + 1));
+        continue;
+      }
+      return response.text();
+    } catch (error) {
+      lastError = error;
+      if (attempt >= retries) {
+        fail(`Failed to fetch article URL: ${url}; ${error.message}`);
+      }
+      await sleep(250 * (attempt + 1));
+    }
+  }
+  fail(`Failed to fetch article URL: ${url}; ${lastError ? lastError.message : "unknown error"}`);
 }
 
 function ensureValue(value) {
@@ -204,22 +275,19 @@ async function readArticleFile(filePath) {
   };
 }
 
-async function readArticleUrl(url) {
+async function readArticleUrl(url, options = {}) {
   if (url.startsWith("file://")) {
     return readArticleFile(new URL(url));
   }
 
-  const response = await fetch(url, {
-    headers: {
-      "User-Agent": "paper2omics"
-    }
-  });
-  if (!response.ok) {
-    fail(`Failed to fetch article URL (${response.status}): ${url}`);
-  }
-
   return {
-    raw: await response.text(),
+    raw: await fetchText(url, {
+      timeoutMs: options.timeoutMs,
+      retries: options.retries,
+      headers: {
+        "User-Agent": "paper2omics"
+      }
+    }),
     articleUrl: url,
     sourceType: "article_url"
   };
@@ -233,10 +301,10 @@ function resolvePathString(value) {
   return resolved;
 }
 
-async function collectFromArticle(args, maxTextChars, snippetChars) {
+async function collectFromArticle(args, maxTextChars, snippetChars, fetchOptions) {
   const source = args["article-file"]
     ? await readArticleFile(args["article-file"])
-    : await readArticleUrl(args["article-url"]);
+    : await readArticleUrl(args["article-url"], fetchOptions);
   const html = source.raw;
   const resolvedTitle = args["paper-title"]
     || extractMetaContent(html, ["citation_title", "dc.title", "og:title", "twitter:title"])
@@ -314,6 +382,10 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   const maxTextChars = Number.parseInt(args["max-text-chars"] || `${DEFAULT_MAX_TEXT_CHARS}`, 10);
   const snippetChars = Number.parseInt(args["snippet-chars"] || `${DEFAULT_SNIPPET_CHARS}`, 10);
+  const fetchOptions = {
+    timeoutMs: parseNonNegativeInteger("fetch-timeout-ms", args["fetch-timeout-ms"], DEFAULT_FETCH_TIMEOUT_MS),
+    retries: parseNonNegativeInteger("fetch-retries", args["fetch-retries"], DEFAULT_FETCH_RETRIES)
+  };
 
   const hasPaperSource = Boolean(args["article-url"] || args["article-file"] || args["pdf-path"] || args["paper-title"]);
   if (!hasPaperSource) {
@@ -322,7 +394,7 @@ async function main() {
 
   let payload;
   if (args["article-url"] || args["article-file"]) {
-    payload = await collectFromArticle(args, maxTextChars, snippetChars);
+    payload = await collectFromArticle(args, maxTextChars, snippetChars, fetchOptions);
   } else if (args["pdf-path"]) {
     payload = await collectFromPdf(args, maxTextChars, snippetChars);
   } else {

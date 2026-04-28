@@ -220,6 +220,17 @@ function buildSkillMarkdown(spec, skillName) {
   const citations = renderCitations(spec.citations);
   const resultFields = spec.outputBundle.result_fields.map((field) => '- `' + field + '`').join("\n");
   const requiredPaths = spec.outputBundle.required_paths.map((item) => '- `' + item + '`').join("\n");
+  const parameterSchema = buildParameterSchemaObject(spec);
+  const schemaParametersByGroup = (group) => Object.entries(parameterSchema.workflow_params)
+    .filter(([, item]) => item.resolution_group === group)
+    .map(([name, item]) => ({ name, ...item }));
+  const renderSchemaParameter = (item) => [
+    '- `' + item.name + '`',
+    'type: `' + item.type + '`',
+    'required: `' + item.required + '`',
+    'default: `' + (item.default === null ? 'null' : item.default) + '`',
+    'Evidence ID: `' + item.evidence_id + '`'
+  ].join('; ');
   const lines = [];
 
   lines.push('---');
@@ -246,10 +257,10 @@ function buildSkillMarkdown(spec, skillName) {
   }).join("\n"));
   lines.push('', '## Required User Decisions', '', renderBulletList(spec.parameterPolicy.required_user_decisions));
   lines.push('', '## Default Parameter Rules', '');
-  lines.push(renderParameterSection('User Required', spec.parameterPolicy.user_required, (item) => '- `' + item.name + '`: ' + item.description.en + '. Evidence ID: `' + item.evidence_id + '`. Sources: ' + (item.sources || []).join(', ')));
-  lines.push('', renderParameterSection('Auto Detected', spec.parameterPolicy.auto_detected, (item) => '- `' + item.name + '`: ' + item.description.en + '. Evidence ID: `' + item.evidence_id + '`. Sources: ' + (item.sources || []).join(', ') + (item.fallback_value !== undefined ? '. Fallback: `' + item.fallback_value + '`' : '')));
-  lines.push('', renderParameterSection('Literature Defaults', spec.parameterPolicy.literature_defaults, (item) => '- `' + item.name + '` = `' + item.value + '`: ' + item.rationale.en + '. Evidence ID: `' + item.evidence_id + '`'));
-  lines.push('', renderParameterSection('Wrapper Defaults', spec.parameterPolicy.wrapper_defaults, (item) => '- `' + item.name + '` = `' + item.value + '`: ' + item.rationale.en + '. Evidence ID: `' + item.evidence_id + '`'));
+  lines.push(renderParameterSection('User Required', schemaParametersByGroup('user_required'), renderSchemaParameter));
+  lines.push('', renderParameterSection('Auto Detected', schemaParametersByGroup('auto_detected'), renderSchemaParameter));
+  lines.push('', renderParameterSection('Literature Defaults', schemaParametersByGroup('literature_defaults'), renderSchemaParameter));
+  lines.push('', renderParameterSection('Wrapper Defaults', schemaParametersByGroup('wrapper_defaults'), renderSchemaParameter));
   lines.push('', '### Decision Rules', '', spec.parameterPolicy.decision_rules.map((item) => '- ' + item.titleEn + ': ' + item.detailsEn).join("\n"));
   lines.push('', '## Workflow', '', renderWorkflow(spec.executionContract.workflow_steps));
   lines.push('', '## QC / Validation Rules', '', renderQcRules(spec.qcContract.rules));
@@ -432,14 +443,221 @@ function buildWorkflowYaml(spec) {
   })}\n`;
 }
 
-function buildConfigSchemaYaml(spec) {
-  const requiredFields = new Set(spec.inputContract.required_manifest_fields || []);
-  const parameterNames = [
-    ...spec.parameterPolicy.user_required.map((item) => item.name),
-    ...spec.parameterPolicy.auto_detected.map((item) => item.name),
-    ...spec.parameterPolicy.literature_defaults.map((item) => item.name),
-    ...spec.parameterPolicy.wrapper_defaults.map((item) => item.name)
+function kebabFlag(name) {
+  return `--${String(name).replace(/_/g, "-")}`;
+}
+
+function sourcePaths(item, prefix) {
+  return (item.sources || [])
+    .filter((source) => String(source).startsWith(prefix))
+    .map((source) => String(source).slice(prefix.length));
+}
+
+function stateRuleForParameter(spec, parameterName) {
+  return (spec.inputContract.state_requirements || []).find((rule) => {
+    const lastPart = String(rule.path || "").split(".").pop();
+    return lastPart === parameterName;
+  });
+}
+
+function inferParameterType(item) {
+  const value = Object.prototype.hasOwnProperty.call(item, "value")
+    ? item.value
+    : item.fallback_value;
+  if (typeof value === "boolean") {
+    return "boolean";
+  }
+  if (typeof value === "number") {
+    return Number.isInteger(value) ? "integer" : "float";
+  }
+  return "string";
+}
+
+function parameterDefault(item, category) {
+  if (Object.prototype.hasOwnProperty.call(item, "value")) {
+    return item.value;
+  }
+  if (Object.prototype.hasOwnProperty.call(item, "fallback_value")) {
+    return item.fallback_value;
+  }
+  return category === "user_required" ? null : "auto";
+}
+
+function parameterSpecFromPolicyItem(spec, item, category) {
+  const stateRule = stateRuleForParameter(spec, item.name);
+  return {
+    cli_flag: kebabFlag(item.name),
+    type: inferParameterType(item),
+    required: category === "user_required",
+    default: parameterDefault(item, category),
+    description: english(item.description || item.rationale || item.name),
+    level: category === "wrapper_defaults" ? "developer" : "basic",
+    choices: stateRule?.one_of || [],
+    validation: stateRule?.one_of ? { choices: stateRule.one_of } : {},
+    auto_detect: category === "auto_detect" ? {
+      source: (item.sources || []).join(", "),
+      rule: english(item.rationale || "Resolve from runtime, manifest, or fallback.")
+    } : {},
+    config_paths: sourcePaths(item, "config."),
+    manifest_paths: sourcePaths(item, "manifest."),
+    runtime_paths: sourcePaths(item, "runtime."),
+    resolution_group: category,
+    evidence_id: item.evidence_id,
+    evidence_priority_class: item.evidence_priority_class,
+    evidence_sources: item.evidence_sources || []
+  };
+}
+
+function workflowParameterEntries(spec) {
+  const groups = [
+    ["user_required", spec.parameterPolicy.user_required || []],
+    ["auto_detected", spec.parameterPolicy.auto_detected || []],
+    ["literature_defaults", spec.parameterPolicy.literature_defaults || []],
+    ["wrapper_defaults", spec.parameterPolicy.wrapper_defaults || []]
   ];
+  const entries = [];
+  for (const [category, items] of groups) {
+    for (const item of items) {
+      entries.push([item.name, parameterSpecFromPolicyItem(spec, item, category)]);
+    }
+  }
+  return entries;
+}
+
+function buildParameterSchemaObject(spec) {
+  const methodName = spec.metadata.analysis_type || "default";
+  const workflowParams = Object.fromEntries(workflowParameterEntries(spec));
+  return {
+    schema_version: "0.2.0",
+    skill: {
+      name: spec.skillName,
+      version: spec.metadata.version || "0.1.0",
+      category: spec.metadata.domain || "omics",
+      task_type: methodName,
+      description: spec.displayName
+    },
+    parameter_groups: [
+      { name: "global_params", description: "Parameters shared by all commands." },
+      { name: "workflow_params", description: "Paper workflow parameters derived from evidence." },
+      { name: "execution_params", description: "Parameters controlling runtime behavior." },
+      { name: "output_params", description: "Parameters controlling generated files." },
+      { name: "qc_params", description: "Parameters controlling quality checks." }
+    ],
+    global_params: {
+      input: {
+        cli_flag: "--input",
+        type: "path",
+        required: true,
+        default: null,
+        description: "Input manifest file or directory containing input_manifest.json.",
+        level: "basic",
+        validation: { exists: true }
+      },
+      out: {
+        cli_flag: "--out",
+        type: "path",
+        required: false,
+        default: null,
+        description: "Output directory for plan or run artifacts.",
+        level: "basic",
+        validation: { create_if_missing: true }
+      },
+      config: {
+        cli_flag: "--config",
+        type: "path",
+        required: false,
+        default: null,
+        description: "Optional user override config.",
+        level: "basic",
+        validation: { exists: true }
+      },
+      method: {
+        cli_flag: "--method",
+        type: "enum",
+        required: false,
+        default: methodName,
+        description: "Workflow method to execute.",
+        level: "basic",
+        choices: [methodName]
+      }
+    },
+    workflow_params: workflowParams,
+    execution_params: {
+      dry_run: {
+        cli_flag: "--dry-run",
+        type: "boolean",
+        required: false,
+        default: false,
+        description: "Validate and materialize the result bundle without native execution.",
+        level: "basic",
+        config_paths: ["runtime.dry_run"]
+      },
+      resume: {
+        cli_flag: "--resume",
+        type: "boolean",
+        required: false,
+        default: false,
+        description: "Resume a previous output directory when supported.",
+        level: "intermediate",
+        config_paths: ["runtime.resume"]
+      }
+    },
+    output_params: {
+      result_bundle: {
+        cli_flag: "--result-bundle",
+        type: "path",
+        required: false,
+        default: "results",
+        description: "Default result bundle directory name used by generated configs.",
+        level: "basic",
+        config_paths: ["outputs.result_bundle"],
+        validation: { create_if_missing: true }
+      }
+    },
+    qc_params: {},
+    methods: {
+      [methodName]: {
+        description: spec.displayName,
+        backend: spec.metadata.tool_runtime || "cli",
+        enabled: true,
+        priority: Object.keys(workflowParams),
+        requires: {
+          input_state: (spec.inputContract.state_requirements || []).map((rule) => rule.path)
+        },
+        params: {}
+      }
+    },
+    conditional_rules: [
+      {
+        name: "required_workflow_parameters",
+        description: "Required workflow parameters must resolve before execution.",
+        rule: {
+          required: Object.entries(workflowParams)
+            .filter(([, item]) => item.required)
+            .map(([name]) => name)
+        },
+        severity: "error"
+      }
+    ],
+    parameter_resolution: {
+      priority: ["user_cli", "user_config", "method_defaults", "global_defaults", "auto_detect", "error"]
+    },
+    export: {
+      write_effective_parameters: true,
+      effective_parameters_file: "effective_parameters.json",
+      write_parameter_warnings: true,
+      parameter_warnings_file: "parameter_warnings.json"
+    }
+  };
+}
+
+function buildParameterSchemaYaml(spec) {
+  return `${toYaml(buildParameterSchemaObject(spec))}\n`;
+}
+
+function buildConfigSchemaYaml(spec) {
+  const parameterSchema = buildParameterSchemaObject(spec);
+  const requiredFields = new Set(spec.inputContract.required_manifest_fields || []);
   return `${toYaml({
     inputs: Object.fromEntries((spec.inputContract.file_fields || []).map((field) => [
       field.path.replace(/^inputs\./, "").replace(/\./g, "_"),
@@ -450,28 +668,38 @@ function buildConfigSchemaYaml(spec) {
       }
     ])),
     required_manifest_fields: [...requiredFields],
-    parameters: Object.fromEntries(parameterNames.map((name) => [
+    parameters: Object.fromEntries(Object.entries(parameterSchema.workflow_params).map(([name, item]) => [
       name,
       {
-        type: "string",
-        required: spec.parameterPolicy.user_required.some((item) => item.name === name),
-        default: spec.parameterPolicy.wrapper_defaults.find((item) => item.name === name)?.value || "auto"
+        type: item.type,
+        required: item.required,
+        default: item.default === null ? "auto" : item.default
       }
     ]))
   })}\n`;
 }
 
 function buildDefaultConfigYaml(spec) {
+  const schema = buildParameterSchemaObject(spec);
+  const analysis = {
+    mode: spec.metadata.analysis_type
+  };
+  for (const [name, item] of Object.entries(schema.workflow_params)) {
+    const analysisPath = (item.config_paths || []).find((configPath) => configPath.startsWith("analysis."));
+    if (analysisPath) {
+      analysis[analysisPath.slice("analysis.".length)] = item.default;
+    } else if (item.required) {
+      analysis[name] = item.default;
+    }
+  }
   return `${toYaml({
-    analysis: {
-      mode: spec.metadata.analysis_type,
-      preferred_language: spec.algorithmClassification?.implementation?.preferred_language || spec.metadata.tool_runtime
-    },
+    analysis,
     runtime: {
-      dry_run: true
+      dry_run: schema.execution_params.dry_run.default,
+      resume: schema.execution_params.resume.default
     },
     outputs: {
-      result_bundle: "results"
+      result_bundle: schema.output_params.result_bundle.default
     }
   })}\n`;
 }
@@ -788,6 +1016,7 @@ function buildReadmeArtifact(spec, skillName) {
 }
 function buildPythonOrchestrator(spec, skillName) {
   const specJson = JSON.stringify(spec, null, 2);
+  const parameterSchemaJson = JSON.stringify(buildParameterSchemaObject(spec), null, 2);
   const readmeLiteral = pythonStringLiteral(buildReadmeArtifact(spec, skillName));
   return `#!/usr/bin/env python3
 from __future__ import annotations
@@ -808,6 +1037,7 @@ except ImportError:
     yaml = None
 
 SPEC = json.loads(r'''${specJson}''')
+PARAMETER_SCHEMA = json.loads(r'''${parameterSchemaJson}''')
 FORCED_MISSING = {
     item.strip()
     for item in os.environ.get("CODEX_FORCE_MISSING_EXECUTABLES", "").split(",")
@@ -885,6 +1115,199 @@ def load_config(config_arg: str | None):
     if not config_arg:
         return {}
     return load_mapping_file(Path(config_arg))
+
+
+class ParameterError(ValueError):
+    pass
+
+
+PARAMETER_SECTIONS = (
+    "global_params",
+    "workflow_params",
+    "execution_params",
+    "output_params",
+    "qc_params",
+)
+
+
+def collect_parameter_specs():
+    specs = {}
+    groups = {}
+    for section in PARAMETER_SECTIONS:
+        for name, spec in (PARAMETER_SCHEMA.get(section) or {}).items():
+            specs[name] = spec
+            groups[name] = section
+    return specs, groups
+
+
+def parse_bool_value(name: str, value):
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return None
+    normalized = str(value).strip().lower()
+    if normalized in {"1", "true", "yes", "y", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "n", "off"}:
+        return False
+    raise ParameterError(
+        f"Invalid parameter: {name}={value}. Reason: expected a boolean value. "
+        "Suggested fix: use true or false."
+    )
+
+
+def coerce_parameter_value(name: str, value, spec):
+    if value in (None, ""):
+        return None
+    parameter_type = spec.get("type", "string")
+    try:
+        if parameter_type == "boolean":
+            return parse_bool_value(name, value)
+        if parameter_type == "integer":
+            return int(value)
+        if parameter_type == "float":
+            return float(value)
+        if parameter_type.startswith("list["):
+            return value if isinstance(value, list) else [item.strip() for item in str(value).split(",") if item.strip()]
+        if parameter_type == "dict":
+            if isinstance(value, dict):
+                return value
+            return json.loads(value)
+        return str(value) if parameter_type in {"string", "path", "enum"} else value
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise ParameterError(
+            f"Invalid parameter: {name}={value}. Reason: expected type {parameter_type}. "
+            f"Suggested fix: provide a valid {parameter_type} value."
+        ) from exc
+
+
+def validate_one_parameter(name: str, value, spec):
+    if spec.get("required") and value in (None, "", []):
+        raise ParameterError(
+            f"Invalid parameter: {name}={value}. Reason: required parameter is missing. "
+            f"Suggested fix: pass {spec.get('cli_flag', '--' + name.replace('_', '-'))} or provide it in config/input manifest."
+        )
+    if value in (None, "", []):
+        return
+    choices = spec.get("choices") or spec.get("validation", {}).get("choices") or []
+    if choices and value not in choices:
+        raise ParameterError(
+            f"Invalid parameter: {name}={value}. Reason: expected one of {choices}. "
+            f"Suggested fix: use one of {choices}."
+        )
+    validation = spec.get("validation") or {}
+    if "min" in validation and value < validation["min"]:
+        raise ParameterError(
+            f"Invalid parameter: {name}={value}. Reason: value is below minimum {validation['min']}."
+        )
+    if "max" in validation and value > validation["max"]:
+        raise ParameterError(
+            f"Invalid parameter: {name}={value}. Reason: value is above maximum {validation['max']}."
+        )
+
+
+def resolve_from_paths(paths, data):
+    for path in paths or []:
+        value = get_nested(data, path)
+        if value not in (None, "", []):
+            return value, path
+    return None, None
+
+
+def resolve_effective_parameters(args, manifest, config, runtime):
+    specs, groups = collect_parameter_specs()
+    effective = {}
+    parameter_sources = {}
+    auto_detected = {}
+    warnings = []
+    records = []
+
+    cli_values = {
+        name: getattr(args, name, None)
+        for name in specs
+        if hasattr(args, name)
+    }
+    cli_values.update({
+        "input": getattr(args, "input", None),
+        "out": getattr(args, "out", None),
+        "config": getattr(args, "config", None),
+        "dry_run": getattr(args, "dry_run", None),
+        "resume": getattr(args, "resume", None),
+    })
+
+    for name, spec in specs.items():
+        value = None
+        source = None
+        raw_cli = cli_values.get(name)
+        if raw_cli not in (None, "", []):
+            value = raw_cli
+            source = "user_cli"
+        if source is None:
+            value, config_path = resolve_from_paths(spec.get("config_paths"), config)
+            if config_path:
+                source = "user_config"
+        if source is None and name in config and config[name] not in (None, "", []):
+            value = config[name]
+            source = "user_config"
+        if source is None and spec.get("default") not in (None, "auto"):
+            value = spec.get("default")
+            source = "method_defaults" if groups.get(name) == "workflow_params" else "global_defaults"
+        if source is None:
+            value, runtime_path = resolve_from_paths(spec.get("runtime_paths"), runtime)
+            if runtime_path:
+                source = "auto_detect"
+        if source is None:
+            value, manifest_path = resolve_from_paths(spec.get("manifest_paths"), manifest)
+            if manifest_path:
+                source = "auto_detect"
+        if source is None and spec.get("default") == "auto":
+            value = "auto"
+            source = "auto_detect"
+
+        coerced = coerce_parameter_value(name, value, spec)
+        validate_one_parameter(name, coerced, spec)
+        effective[name] = coerced
+        parameter_sources[name] = source or "error"
+        if parameter_sources[name] == "auto_detect":
+            auto_detected[name] = {
+                "selected": coerced,
+                "source": (spec.get("manifest_paths") or spec.get("runtime_paths") or ["auto"])[0],
+                "rule": (spec.get("auto_detect") or {}).get("rule", "Resolved from schema-backed auto-detection.")
+            }
+
+        if groups.get(name) == "workflow_params":
+            records.append({
+                "category": spec.get("resolution_group", "workflow_params"),
+                "name": name,
+                "value": coerced,
+                "status": "pass" if coerced not in (None, "", []) else "warn",
+                "resolution_source": parameter_sources[name],
+                "evidence_priority_class": spec.get("evidence_priority_class"),
+                "evidence_sources": spec.get("evidence_sources", []),
+                "rationale": {
+                    "en": spec.get("description", ""),
+                    "zh": spec.get("description", "")
+                }
+            })
+
+    legacy_status = "pass"
+    if any(record["status"] == "fail" for record in records):
+        legacy_status = "fail"
+    elif any(record["status"] == "warn" for record in records):
+        legacy_status = "warn"
+
+    return {
+        "skill": PARAMETER_SCHEMA["skill"],
+        "parameter_resolution_priority": PARAMETER_SCHEMA["parameter_resolution"]["priority"],
+        "effective_parameters": effective,
+        "parameter_sources": parameter_sources,
+        "auto_detected": auto_detected,
+        "warnings": warnings,
+        "legacy_parameter_resolution": {
+            "status": legacy_status,
+            "records": records
+        }
+    }
 
 
 def runtime_probe():
@@ -1228,6 +1651,8 @@ def materialize_bundle(out_dir: Path, result, commands, manifest_path: Path):
     write_text(out_dir / "README.md", ${readmeLiteral})
     write_json(out_dir / "result.json", result)
     write_text(out_dir / "report.md", build_report(result))
+    write_json(out_dir / "effective_parameters.json", result["effective_parameters"])
+    write_json(out_dir / "parameters" / "effective_parameters.json", result["effective_parameters"])
     write_json(out_dir / "parameters" / "resolved_parameters.json", result["parameter_resolution"])
     write_json(out_dir / "qc" / "input_validation.json", result["input_validation"])
     write_json(out_dir / "qc" / "runtime_probe.json", result["runtime_probe"])
@@ -1239,6 +1664,7 @@ def materialize_bundle(out_dir: Path, result, commands, manifest_path: Path):
         "manifest_path": str(manifest_path),
         "commands": commands,
         "runtime_probe": result["runtime_probe"],
+        "effective_parameters": result["effective_parameters"],
         "parameter_resolution": result["parameter_resolution"],
         "workflow_summary": result["workflow_summary"]
     })
@@ -1248,6 +1674,7 @@ def materialize_bundle(out_dir: Path, result, commands, manifest_path: Path):
         "manifest_path": str(manifest_path),
         "runtime_probe": result["runtime_probe"],
         "input_validation": result["input_validation"],
+        "effective_parameters": result["effective_parameters"],
         "parameter_resolution": result["parameter_resolution"],
         "workflow_summary": result["workflow_summary"],
         "evidence_summary": result["evidence_summary"],
@@ -1286,7 +1713,8 @@ def command_plan(args):
     config = load_config(args.config)
     runtime = runtime_probe()
     input_validation = validate_input_contract(manifest, base_dir)
-    parameter_resolution = resolve_parameters(manifest, config, runtime)
+    effective_parameters = resolve_effective_parameters(args, manifest, config, runtime)
+    parameter_resolution = effective_parameters["legacy_parameter_resolution"]
     workflow = workflow_summary()
     evidence = evidence_summary(parameter_resolution)
     commands = render_command_templates(Path(args.out), manifest_path, parameter_resolution) if args.out else []
@@ -1295,6 +1723,7 @@ def command_plan(args):
         "skill_name": SPEC["skillName"],
         "runtime_probe": runtime,
         "input_validation": input_validation,
+        "effective_parameters": effective_parameters,
         "parameter_resolution": parameter_resolution,
         "workflow_summary": workflow,
         "evidence_summary": evidence,
@@ -1306,6 +1735,8 @@ def command_plan(args):
         write_json(out_dir / "reproducibility" / "plan.json", payload)
         write_json(out_dir / "workflow" / "steps.json", workflow["steps"])
         write_json(out_dir / "workflow" / "dag_edges.json", workflow["dag_edges"])
+        write_json(out_dir / "effective_parameters.json", effective_parameters)
+        write_json(out_dir / "parameters" / "effective_parameters.json", effective_parameters)
         write_json(out_dir / "parameters" / "resolved_parameters.json", parameter_resolution)
         write_json(out_dir / "reproducibility" / "evidence_summary.json", evidence)
     print(json_dump(payload))
@@ -1317,15 +1748,17 @@ def command_run(args):
     config = load_config(args.config)
     runtime = runtime_probe()
     input_validation = validate_input_contract(manifest, base_dir)
-    parameter_resolution = resolve_parameters(manifest, config, runtime)
+    effective_parameters = resolve_effective_parameters(args, manifest, config, runtime)
+    parameter_resolution = effective_parameters["legacy_parameter_resolution"]
     workflow = workflow_summary()
     evidence = evidence_summary(parameter_resolution)
     out_dir = Path(args.out)
     commands = render_command_templates(out_dir, manifest_path, parameter_resolution)
+    dry_run = bool(effective_parameters["effective_parameters"].get("dry_run"))
 
     if input_validation["status"] == "fail" or parameter_resolution["status"] == "fail":
         status = "invalid_input_contract"
-    elif args.dry_run:
+    elif dry_run:
         status = "dry_run_ready"
     elif runtime["status"] == "fail":
         status = "blocked_runtime_missing"
@@ -1334,7 +1767,7 @@ def command_run(args):
     else:
         status = "running"
 
-    qc_summary = evaluate_qc(input_validation, runtime, args.dry_run or status != "running")
+    qc_summary = evaluate_qc(input_validation, runtime, dry_run or status != "running")
 
     result = {
         "status": status,
@@ -1342,6 +1775,7 @@ def command_run(args):
         "paper_title": SPEC["paperTitle"],
         "runtime_probe": runtime,
         "input_validation": input_validation,
+        "effective_parameters": effective_parameters,
         "parameter_resolution": parameter_resolution,
         "workflow_summary": workflow,
         "evidence_summary": evidence,
@@ -1385,6 +1819,8 @@ def command_validate_output(args):
     strict_errors = []
     if args.strict:
         for relative in [
+            "effective_parameters.json",
+            "parameters/effective_parameters.json",
             "parameters/resolved_parameters.json",
             "qc/input_validation.json",
             "qc/runtime_probe.json",
@@ -1432,6 +1868,31 @@ def command_report(args):
     return 0
 
 
+def add_parameter_argument(parser, name: str, spec):
+    flag = spec.get("cli_flag", "--" + name.replace("_", "-"))
+    parameter_type = spec.get("type", "string")
+    help_text = spec.get("description", "")
+    if parameter_type == "boolean":
+        parser.add_argument(flag, dest=name, nargs="?", const=True, default=None, help=help_text)
+    elif parameter_type == "integer":
+        parser.add_argument(flag, dest=name, type=int, default=None, help=help_text)
+    elif parameter_type == "float":
+        parser.add_argument(flag, dest=name, type=float, default=None, help=help_text)
+    elif parameter_type.startswith("list["):
+        parser.add_argument(flag, dest=name, nargs="+", default=None, help=help_text)
+    else:
+        parser.add_argument(flag, dest=name, default=None, help=help_text)
+
+
+def add_schema_parameter_arguments(parser):
+    specs, _groups = collect_parameter_specs()
+    skip = {"input", "out", "config", "dry_run", "resume"}
+    for name, spec in specs.items():
+        if name in skip:
+            continue
+        add_parameter_argument(parser, name, spec)
+
+
 def build_parser():
     parser = argparse.ArgumentParser(description=SPEC["displayName"])
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -1442,9 +1903,10 @@ def build_parser():
         sub.add_argument("--out", required=(name == "run"))
         sub.add_argument("--config")
         sub.add_argument("--validate-only", action="store_true")
-        sub.add_argument("--dry-run", action="store_true")
-        sub.add_argument("--resume", action="store_true")
+        sub.add_argument("--dry-run", action="store_true", default=None)
+        sub.add_argument("--resume", action="store_true", default=None)
         sub.add_argument("--extra-flag", action="append", default=[])
+        add_schema_parameter_arguments(sub)
 
     validate = subparsers.add_parser("validate-output")
     validate.add_argument("--out", required=True)
@@ -1486,6 +1948,12 @@ if __name__ == "__main__":
 function buildChildTest(spec, skillName) {
   const moduleName = pythonModuleName(skillName);
   const wrapperName = `${moduleName}.py`;
+  const schema = buildParameterSchemaObject(spec);
+  const firstUserParam = Object.entries(schema.workflow_params).find(([, item]) => item.required && !(item.choices || []).length)
+    || Object.entries(schema.workflow_params)[0]
+    || [null, null];
+  const choiceParam = Object.entries(schema.workflow_params).find(([, item]) => (item.choices || []).length > 0)
+    || firstUserParam;
   const forcedMissingRuntime = (spec.executionContract.runtime_targets || [])
     .find((target) => target.required && target.name !== "python")?.executable
     || (spec.executionContract.runtime_targets || []).find((target) => target.required)?.name
@@ -1503,6 +1971,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 WRAPPER = ROOT / "${wrapperName}"
 DEMO_INPUT = ROOT / "examples" / "demo_input" / "input_manifest.json"
+USER_PARAM_NAME = ${JSON.stringify(firstUserParam[0])}
+USER_PARAM_FLAG = ${JSON.stringify(firstUserParam[1]?.cli_flag || null)}
+CHOICE_PARAM_NAME = ${JSON.stringify(choiceParam[0])}
+CHOICE_PARAM_FLAG = ${JSON.stringify(choiceParam[1]?.cli_flag || null)}
 
 
 class ${moduleName}ContractTests(unittest.TestCase):
@@ -1535,9 +2007,13 @@ class ${moduleName}ContractTests(unittest.TestCase):
             for relative in ${JSON.stringify(spec.outputBundle.required_paths)}:
                 self.assertTrue((Path(tmp_dir) / relative).exists(), relative)
             resolved = json.loads((Path(tmp_dir) / "parameters" / "resolved_parameters.json").read_text(encoding="utf-8"))
+            effective = json.loads((Path(tmp_dir) / "effective_parameters.json").read_text(encoding="utf-8"))
+            nested_effective = json.loads((Path(tmp_dir) / "parameters" / "effective_parameters.json").read_text(encoding="utf-8"))
             evidence = json.loads((Path(tmp_dir) / "reproducibility" / "evidence_summary.json").read_text(encoding="utf-8"))
             workflow_steps = json.loads((Path(tmp_dir) / "workflow" / "steps.json").read_text(encoding="utf-8"))
             self.assertEqual(resolved["status"], payload["parameter_resolution"]["status"])
+            self.assertEqual(effective["effective_parameters"], payload["effective_parameters"]["effective_parameters"])
+            self.assertEqual(nested_effective["parameter_sources"], payload["effective_parameters"]["parameter_sources"])
             self.assertTrue(evidence["workflow_step_priorities"])
             self.assertEqual(workflow_steps[0]["id"], payload["workflow_summary"]["steps"][0]["id"])
             validation = self.run_cmd("validate-output", "--out", tmp_dir, "--strict")
@@ -1545,6 +2021,51 @@ class ${moduleName}ContractTests(unittest.TestCase):
             validation_payload = json.loads(validation.stdout)
             self.assertEqual(validation_payload["status"], "pass")
             self.assertEqual(validation_payload["strict_errors"], [])
+
+    def test_schema_cli_overrides_manifest_and_config(self):
+        if not USER_PARAM_NAME or not USER_PARAM_FLAG:
+            self.skipTest("Generated skill has no workflow parameter to override.")
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            config_path = Path(tmp_dir) / "override.json"
+            config_path.write_text(json.dumps({"analysis": {USER_PARAM_NAME: "MYC"}}), encoding="utf-8")
+            completed = self.run_cmd(
+                "plan",
+                "--input",
+                str(DEMO_INPUT),
+                "--out",
+                tmp_dir,
+                "--config",
+                str(config_path),
+                USER_PARAM_FLAG,
+                "TP53"
+            )
+            self.assertEqual(completed.returncode, 0, msg=completed.stderr)
+            payload = json.loads(completed.stdout)
+            effective = payload["effective_parameters"]
+            self.assertEqual(effective["effective_parameters"][USER_PARAM_NAME], "TP53")
+            self.assertEqual(effective["parameter_sources"][USER_PARAM_NAME], "user_cli")
+
+    def test_schema_config_overrides_manifest(self):
+        if not USER_PARAM_NAME:
+            self.skipTest("Generated skill has no workflow parameter to override.")
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            config_path = Path(tmp_dir) / "override.json"
+            config_path.write_text(json.dumps({"analysis": {USER_PARAM_NAME: "MYC"}}), encoding="utf-8")
+            completed = self.run_cmd("plan", "--input", str(DEMO_INPUT), "--out", tmp_dir, "--config", str(config_path))
+            self.assertEqual(completed.returncode, 0, msg=completed.stderr)
+            payload = json.loads(completed.stdout)
+            effective = payload["effective_parameters"]
+            self.assertEqual(effective["effective_parameters"][USER_PARAM_NAME], "MYC")
+            self.assertEqual(effective["parameter_sources"][USER_PARAM_NAME], "user_config")
+
+    def test_schema_invalid_choice_fails_with_parameter_message(self):
+        if not CHOICE_PARAM_NAME or not CHOICE_PARAM_FLAG:
+            self.skipTest("Generated skill has no choice-backed parameter.")
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            completed = self.run_cmd("plan", "--input", str(DEMO_INPUT), "--out", tmp_dir, CHOICE_PARAM_FLAG, "invalid_mode")
+            self.assertNotEqual(completed.returncode, 0)
+            self.assertIn("Invalid parameter", completed.stderr)
+            self.assertIn(CHOICE_PARAM_NAME, completed.stderr)
 
     def test_validate_output_detects_missing_artifact(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -1720,6 +2241,8 @@ async function main() {
   await ensureDir(path.join(targetDir, "examples", "expected_output"));
   await ensureDir(path.join(targetDir, "knowledge"));
   await ensureDir(path.join(targetDir, "configs"));
+  await ensureDir(path.join(targetDir, "config"));
+  await ensureDir(path.join(targetDir, "schemas"));
   await ensureDir(path.join(targetDir, "scripts"));
   await ensureDir(path.join(targetDir, "reports"));
 
@@ -1727,7 +2250,9 @@ async function main() {
   await writeFile(path.join(targetDir, "algorithm_classification.yaml"), buildAlgorithmClassificationYaml(spec));
   await writeFile(path.join(targetDir, "skill.yaml"), buildSkillYaml(spec, skillName));
   await writeFile(path.join(targetDir, "workflow.yaml"), buildWorkflowYaml(spec));
+  await writeFile(path.join(targetDir, "schemas", "parameter_schema.yaml"), buildParameterSchemaYaml(spec));
   await writeFile(path.join(targetDir, "config_schema.yaml"), buildConfigSchemaYaml(spec));
+  await writeFile(path.join(targetDir, "config", "default.yaml"), buildDefaultConfigYaml(spec));
   await writeFile(path.join(targetDir, "configs", "default.yaml"), buildDefaultConfigYaml(spec));
   await writeFile(path.join(targetDir, "configs", "demo.yaml"), buildDemoConfigYaml(spec));
   await writeFile(path.join(targetDir, "agents", "openai.yaml"), buildOpenAiYaml(spec, skillName));

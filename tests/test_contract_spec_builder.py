@@ -4,6 +4,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import importlib.util
 from pathlib import Path
 
 try:
@@ -21,6 +22,11 @@ ARTICLE_FIXTURE = ROOT / "tests" / "fixtures" / "sc-tenifold-knk.paper.html"
 
 
 def default_quick_validate():
+    if importlib.util.find_spec("yaml") is None:
+        raise unittest.SkipTest(
+            "quick_validate.py requires PyYAML. Install with: pip install pyyaml"
+        )
+
     env_value = os.environ.get("SKILL_CREATOR_QUICK_VALIDATE")
     if env_value:
         return Path(env_value)
@@ -246,8 +252,10 @@ class ContractSpecBuilderTests(unittest.TestCase):
                 "algorithm_classification.yaml",
                 "skill.yaml",
                 "workflow.yaml",
+                "schemas/parameter_schema.yaml",
                 "evidence_report.md",
                 "config_schema.yaml",
+                "config/default.yaml",
                 "configs/default.yaml",
                 "configs/demo.yaml",
                 "scripts/04_run_perturbation.py",

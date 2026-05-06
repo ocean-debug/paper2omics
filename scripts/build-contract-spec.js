@@ -125,6 +125,10 @@ function regexCount(text, expressions) {
   }, 0);
 }
 
+function escapeRegExp(value) {
+  return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function workflowMiningPriority() {
   return [
     "running_example_notebook_demo_script",
@@ -133,6 +137,16 @@ function workflowMiningPriority() {
     "readme",
     "paper_methods",
     "paper_abstract"
+  ];
+}
+
+function classificationPriority() {
+  return [
+    "running_example_notebook_demo_script",
+    "official_docs_tutorial",
+    "paper_abstract",
+    "source_code_api",
+    "readme"
   ];
 }
 
@@ -189,6 +203,29 @@ function inferEvidenceSourceType(source, category) {
 function rankedPriority(labels, priorityOrder, fallback = "manual_fallback_rule") {
   const available = new Set(ensureArray(labels).filter(Boolean));
   return ensureArray(priorityOrder).find((item) => available.has(item)) || fallback;
+}
+
+function priorityIndex(priority, priorityOrder = classificationPriority()) {
+  const index = ensureArray(priorityOrder).indexOf(priority);
+  return index === -1 ? priorityOrder.length : index;
+}
+
+function classificationSourceWeight(priority) {
+  return {
+    running_example_notebook_demo_script: 100,
+    official_docs_tutorial: 80,
+    paper_abstract: 60,
+    source_code_api: 40,
+    readme: 20
+  }[priority] || 10;
+}
+
+function classificationCandidateKindRank(kind) {
+  return {
+    curated_rule: 0,
+    open_extracted: 1,
+    fallback: 2
+  }[kind] ?? 3;
 }
 
 function evidenceTraceItems(items, priorityMapper = evidencePriorityLabel, claimType = "source") {
@@ -389,31 +426,334 @@ function inferDomain(text, override) {
   return "omics";
 }
 
-function inferAnalysisType(text, override) {
+function classificationEvidenceEntries(repoEvidence, paperEvidence) {
+  const sections = repoEvidence.selections || {};
+  const entries = [];
+  const pushEntry = (entry, sourcePriority) => {
+    if (!entry || !entry.preview) {
+      return;
+    }
+    const source = entry.path || entry.source || sourcePriority;
+    entries.push({
+      source,
+      path: entry.path,
+      text: `${entry.path || ""}\n${entry.preview || ""}`,
+      category: sourcePriority,
+      priority_class: sourcePriority,
+      source_priority: sourcePriority,
+      claim_type: "classification"
+    });
+  };
+
+  for (const entry of [
+    ...ensureArray(sections.examples),
+    ...ensureArray(sections.notebooks)
+  ]) {
+    pushEntry(entry, "running_example_notebook_demo_script");
+  }
+  for (const entry of ensureArray(sections.docs)) {
+    pushEntry(entry, "official_docs_tutorial");
+  }
+
+  const paper = paperEvidence?.paper || {};
+  if (paper.abstract) {
+    entries.push({
+      source: "paper.abstract",
+      text: `${paper.resolvedTitle || paper.requestedTitle || ""}\n${paper.abstract}`,
+      category: "paper_abstract",
+      priority_class: "paper_abstract",
+      source_priority: "paper_abstract",
+      source_type: "paper",
+      claim_type: "classification"
+    });
+  }
+
+  for (const entry of ensureArray(sections.entrypoints)) {
+    pushEntry(entry, "source_code_api");
+  }
+  for (const entry of ensureArray(sections.readme)) {
+    pushEntry(entry, "readme");
+  }
+
+  return entries;
+}
+
+function classificationCandidateRules() {
+  return [
+    {
+      label: "tf-perturbation",
+      open_label: "tf_perturbation",
+      primary_task: "perturbation_analysis",
+      task_family: ["regulatory_network", "perturbation"],
+      secondary_tasks: ["in_silico_TF_perturbation", "cell_identity_transition", "GRN_inference"],
+      patterns: [/CellOracle/i, /TF perturbation/i, /transcription factor perturbation/i, /in silico gene perturbation/i, /transition vector/i]
+    },
+    {
+      label: "virtual-knockout",
+      open_label: "virtual_gene_knockout",
+      primary_task: "perturbation_analysis",
+      task_family: ["regulatory_network", "perturbation"],
+      secondary_tasks: ["virtual_gene_knockout", "gene_function_prediction", "perturbed_gene_ranking"],
+      patterns: [/virtual knockout/i, /in-silico knockout/i, /in silico knockout/i, /knocks out a target gene/i, /\bgKO\b/i]
+    },
+    {
+      label: "trajectory_transition_analysis",
+      open_label: "trajectory_transition_analysis",
+      primary_task: "trajectory_transition_analysis",
+      task_family: ["trajectory_analysis", "cell_state_transition"],
+      secondary_tasks: ["fate_transition_mapping", "cell_state_transition"],
+      patterns: [/trajectory[_ -]transition/i, /fate[_ -]transition/i, /cell[_ -]state[_ -]transition/i, /transition[_ -]map/i, /trajectory[_ -]analysis/i]
+    },
+    {
+      label: "pathway_activity_scoring",
+      open_label: "pathway_activity_scoring",
+      primary_task: "pathway_activity_scoring",
+      task_family: ["pathway_activity_scoring", "metabolomics_interpretation"],
+      secondary_tasks: ["metabolite_set_enrichment", "pathway_ranking"],
+      patterns: [/pathway activity scoring/i, /score pathway activity/i, /metabolic pathway activity/i, /metabolite set enrichment/i]
+    },
+    {
+      label: "differential-expression",
+      open_label: "differential_expression",
+      primary_task: "differential_expression",
+      task_family: ["differential_expression"],
+      secondary_tasks: [],
+      patterns: [/differential expression/i, /differentially expressed/i, /DESeq2/i, /edgeR/i]
+    },
+    {
+      label: "gene-regulatory-network",
+      open_label: "gene_regulatory_network_inference",
+      primary_task: "GRN_inference",
+      task_family: ["regulatory_network"],
+      secondary_tasks: [],
+      patterns: [/gene regulatory network/i, /\bGRN\b/i, /scGRN/i, /network inference/i]
+    },
+    {
+      label: "peak-calling",
+      open_label: "peak_calling",
+      primary_task: "peak_calling",
+      task_family: ["peak_calling"],
+      secondary_tasks: [],
+      patterns: [/peak calling/i, /peak caller/i, /\bFRiP\b/i, /\bIDR\b/i]
+    },
+    {
+      label: "integration",
+      open_label: "integration",
+      primary_task: "integration",
+      task_family: ["integration"],
+      secondary_tasks: ["batch_correction", "latent_space_alignment"],
+      patterns: [/integration/i, /batch correction/i, /latent space alignment/i, /cross-dataset/i]
+    }
+  ];
+}
+
+function scoreClassificationCandidate(rule, evidenceEntries) {
+  const matches = [];
+  let score = 0;
+  for (const entry of evidenceEntries) {
+    const count = regexCount(entry.text || "", rule.patterns);
+    if (count === 0) {
+      continue;
+    }
+    score += classificationSourceWeight(entry.source_priority) + count * 8;
+    matches.push({
+      source: entry.source,
+      path: entry.path,
+      category: entry.source_priority,
+      priority_class: entry.source_priority,
+      source_priority: entry.source_priority,
+      source_type: entry.source_type || inferEvidenceSourceType(entry.source, entry.source_priority),
+      claim_type: "classification",
+      snippet: String(entry.text || "").slice(0, 240)
+    });
+  }
+  if (score === 0) {
+    return null;
+  }
+  const bestPriority = rankedPriority(matches.map((item) => item.source_priority), classificationPriority(), "readme");
+  return {
+    ...rule,
+    candidate_kind: "curated_rule",
+    score,
+    confidence: Number(Math.min(0.98, 0.5 + score / 260).toFixed(2)),
+    source_priority: bestPriority,
+    evidence_sources: matches.sort((left, right) => (
+      priorityIndex(left.source_priority) - priorityIndex(right.source_priority)
+      || String(left.source).localeCompare(String(right.source))
+    )).slice(0, 6)
+  };
+}
+
+function normalizeOpenTaskLabel(value) {
+  const text = String(value || "")
+    .toLowerCase()
+    .replace(/cell[\s-]*cell\s+communication(?:\s+analysis)?/g, "cell_communication")
+    .replace(/copy[\s-]*number\s+variation\s+inference/g, "copy_number_variation_inference")
+    .replace(/ligand[\s-]*receptor\s+analysis/g, "ligand_receptor_analysis")
+    .replace(/rna\s+velocity/g, "rna_velocity")
+    .replace(/[^a-z0-9_]+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_|_$/g, "");
+  return text || "omics_analysis";
+}
+
+function extractOpenClassificationPhrases(text) {
+  const patterns = [
+    /cell[\s-]*cell\s+communication(?:\s+analysis)?/gi,
+    /copy[\s-]*number\s+variation\s+inference/gi,
+    /ligand[\s-]*receptor\s+analysis/gi,
+    /rna\s+velocity/gi,
+    /\b([a-z][a-z0-9-]*(?:\s+[a-z][a-z0-9-]*){0,4}\s+(?:analysis|inference|prediction|scoring|estimation|detection|deconvolution|annotation|clustering|alignment|mapping|segmentation|classification))\b/gi
+  ];
+  const phrases = [];
+  for (const pattern of patterns) {
+    for (const match of String(text || "").matchAll(pattern)) {
+      const phrase = match[1] || match[0];
+      const label = normalizeOpenTaskLabel(phrase);
+      if (!label || label === "omics_analysis") {
+        continue;
+      }
+      phrases.push({ phrase, label });
+    }
+  }
+  return phrases;
+}
+
+function openClassificationEvidenceEntries(evidenceEntries) {
+  return evidenceEntries.filter((entry) => [
+    "running_example_notebook_demo_script",
+    "official_docs_tutorial"
+  ].includes(entry.source_priority));
+}
+
+function inferOpenClassificationCandidates(evidenceEntries) {
+  const byLabel = new Map();
+  for (const entry of openClassificationEvidenceEntries(evidenceEntries)) {
+    for (const item of extractOpenClassificationPhrases(entry.text || "")) {
+      const existing = byLabel.get(item.label) || {
+        label: item.label,
+        open_label: item.label,
+        candidate_kind: "open_extracted",
+        primary_task: "omics_analysis",
+        task_family: ["omics_analysis"],
+        secondary_tasks: [],
+        score: 0,
+        phrase: item.phrase,
+        evidence_sources: []
+      };
+      const count = regexCount(entry.text || "", [new RegExp(escapeRegExp(item.phrase), "gi")]) || 1;
+      existing.score += classificationSourceWeight(entry.source_priority) + count * 8;
+      existing.evidence_sources.push({
+        source: entry.source,
+        path: entry.path,
+        category: entry.source_priority,
+        priority_class: entry.source_priority,
+        source_priority: entry.source_priority,
+        source_type: entry.source_type || inferEvidenceSourceType(entry.source, entry.source_priority),
+        claim_type: "classification",
+        snippet: String(entry.text || "").slice(0, 240)
+      });
+      byLabel.set(item.label, existing);
+    }
+  }
+
+  return [...byLabel.values()].map((candidate) => {
+    const bestPriority = rankedPriority(
+      candidate.evidence_sources.map((item) => item.source_priority),
+      classificationPriority(),
+      "official_docs_tutorial"
+    );
+    return {
+      ...candidate,
+      confidence: Number(Math.min(0.92, 0.52 + candidate.score / 320).toFixed(2)),
+      source_priority: bestPriority,
+      evidence_sources: candidate.evidence_sources.sort((left, right) => (
+        priorityIndex(left.source_priority) - priorityIndex(right.source_priority)
+        || String(left.source).localeCompare(String(right.source))
+      )).slice(0, 6)
+    };
+  }).sort((left, right) => (
+    priorityIndex(left.source_priority) - priorityIndex(right.source_priority)
+    || right.score - left.score
+    || left.label.localeCompare(right.label)
+  ));
+}
+
+function inferClassificationProfile(repoEvidence, paperEvidence, override) {
+  if (override) {
+    const rule = classificationCandidateRules().find((item) => item.label === override || item.primary_task === override);
+    return {
+      analysis_type: override,
+      primary: rule ? {
+        ...rule,
+        score: 1,
+        confidence: 0.9,
+        source_priority: "manual_fallback_rule",
+        evidence_sources: ["user_override"]
+      } : {
+        label: override,
+        open_label: override.replace(/-/g, "_"),
+        primary_task: override.replace(/-/g, "_"),
+        task_family: [override.replace(/-/g, "_")],
+        secondary_tasks: [],
+        score: 1,
+        confidence: 0.75,
+        source_priority: "manual_fallback_rule",
+        evidence_sources: ["user_override"]
+      },
+      candidates: [],
+      notes: ["Classification was set from an explicit user override."]
+    };
+  }
+
+  const evidenceEntries = classificationEvidenceEntries(repoEvidence, paperEvidence);
+  const hardcodedCandidates = classificationCandidateRules()
+    .map((rule) => scoreClassificationCandidate(rule, evidenceEntries))
+    .filter(Boolean);
+  const openCandidates = inferOpenClassificationCandidates(evidenceEntries);
+  const candidates = [...openCandidates, ...hardcodedCandidates]
+    .sort((left, right) => (
+      priorityIndex(left.source_priority) - priorityIndex(right.source_priority)
+      || classificationCandidateKindRank(left.candidate_kind) - classificationCandidateKindRank(right.candidate_kind)
+      || right.score - left.score
+      || left.label.localeCompare(right.label)
+    ));
+  const primary = candidates[0] || {
+    label: "omics-analysis",
+    open_label: "omics_analysis",
+    primary_task: "omics_analysis",
+    task_family: ["omics_analysis"],
+    secondary_tasks: [],
+    candidate_kind: "fallback",
+    score: 0,
+    confidence: 0.5,
+    source_priority: "manual_fallback_rule",
+    evidence_sources: ["Not confirmed in paper or code"]
+  };
+
+  const notes = [];
+  const abstractCandidate = candidates.find((candidate) => candidate.source_priority === "paper_abstract");
+  if (abstractCandidate && abstractCandidate.label !== primary.label && primary.source_priority !== "paper_abstract") {
+    notes.push(`The paper abstract also supports ${abstractCandidate.primary_task}, but tutorial/application evidence supports ${primary.primary_task}.`);
+  }
+
+  return {
+    analysis_type: primary.label,
+    primary,
+    candidates,
+    notes
+  };
+}
+
+function inferAnalysisType(classificationProfile, override) {
   if (override) {
     return override;
   }
-
-  if (/CellOracle|TF perturbation|transcription factor perturbation|cell identity transition|transition vector|in silico gene perturbation/gi.test(text)) {
-    return "tf-perturbation";
+  if (classificationProfile && typeof classificationProfile === "object") {
+    return classificationProfile.analysis_type || classificationProfile.primary?.label || "omics-analysis";
   }
-  if (/virtual knockout|in-silico knockout|knocks out a target gene|gene perturbation/gi.test(text)) {
-    return "virtual-knockout";
-  }
-  if (/differential expression|differentially expressed|DESeq2|edgeR/gi.test(text)) {
-    return "differential-expression";
-  }
-  if (/gene regulatory network|scGRN|network inference/gi.test(text)) {
-    return "gene-regulatory-network";
-  }
-  if (/peak calling|peak caller|FRiP|IDR/gi.test(text)) {
-    return "peak-calling";
-  }
-  if (/integration|batch correction|Harmony|latent space/gi.test(text)) {
-    return "integration";
-  }
-
-  return "omics-analysis";
+  const text = String(classificationProfile || "");
+  return inferClassificationProfile({ selections: { readme: [{ path: "text", preview: text }] } }, null).analysis_type;
 }
 
 function inferRuntime(evidence, text, override) {
@@ -695,7 +1035,10 @@ function inferSecondaryModalities(domain, analysisType, text) {
   return dedupe(modalities).filter((item) => item !== inferPrimaryModality(domain));
 }
 
-function inferTaskFamily(analysisType) {
+function inferTaskFamily(analysisType, classificationProfile = null) {
+  if (classificationProfile?.primary?.task_family) {
+    return classificationProfile.primary.task_family;
+  }
   if (analysisType === "tf-perturbation" || analysisType === "virtual-knockout" || analysisType === "gene-regulatory-network") {
     return ["regulatory_network", "perturbation"];
   }
@@ -708,7 +1051,10 @@ function inferTaskFamily(analysisType) {
   return ["omics_analysis"];
 }
 
-function inferPrimaryTask(analysisType) {
+function inferPrimaryTask(analysisType, classificationProfile = null) {
+  if (classificationProfile?.primary?.primary_task) {
+    return classificationProfile.primary.primary_task;
+  }
   switch (analysisType) {
     case "tf-perturbation":
     case "virtual-knockout":
@@ -722,7 +1068,10 @@ function inferPrimaryTask(analysisType) {
   }
 }
 
-function inferSecondaryTasks(analysisType) {
+function inferSecondaryTasks(analysisType, classificationProfile = null) {
+  if (classificationProfile?.primary?.secondary_tasks) {
+    return classificationProfile.primary.secondary_tasks;
+  }
   if (analysisType === "tf-perturbation") {
     return ["in_silico_TF_perturbation", "cell_identity_transition", "GRN_inference"];
   }
@@ -776,6 +1125,46 @@ function inferPerturbationFacets(analysisType, primaryTool, text) {
   }
 
   return null;
+}
+
+function openTaxonomyDomain(domain) {
+  return {
+    "single-cell": "singlecell",
+    "bulk-rna": "bulkrna",
+    "atac-chip": "genomics",
+    spatial: "spatial",
+    proteomics: "proteomics",
+    metabolomics: "metabolomics",
+    "multi-omics": "orchestrator",
+    omics: "orchestrator"
+  }[domain] || String(domain || "omics").replace(/-/g, "_");
+}
+
+function openTaxonomyHierarchy(domain, candidate) {
+  const task = candidate.open_label || candidate.primary_task || candidate.label || "omics_analysis";
+  const taxonomyDomain = openTaxonomyDomain(domain);
+  return {
+    source: "paper2omics_open_taxonomy",
+    domain: taxonomyDomain,
+    task,
+    skill_family: `${taxonomyDomain}-${task.replace(/_/g, "-")}`
+  };
+}
+
+function openCategoriesFromProfile(classificationProfile, domain = "omics") {
+  const candidates = ensureArray(classificationProfile?.candidates).length > 0
+    ? classificationProfile.candidates
+    : [classificationProfile?.primary].filter(Boolean);
+  return candidates.slice(0, 5).map((candidate) => ({
+    axis: "task",
+    label: candidate.open_label || candidate.primary_task || candidate.label,
+    confidence: candidate.confidence,
+    source_priority: candidate.source_priority,
+    hierarchy: openTaxonomyHierarchy(domain, candidate),
+    evidence: candidate.evidence_sources,
+    evidence_sources: candidate.evidence_sources,
+    evidence_id: stableEvidenceId("classification.open_category", candidate.open_label || candidate.primary_task || candidate.label)
+  }));
 }
 
 function inferAvailableLanguages(runtime, text) {
@@ -875,11 +1264,12 @@ function inferOptionalInputs(analysisType) {
   return ["metadata"];
 }
 
-function inferAlgorithmClassification(domain, analysisType, runtime, primaryTool, githubUrl, text, preferredLanguageOverride) {
+function inferAlgorithmClassification(domain, analysisType, runtime, primaryTool, githubUrl, text, preferredLanguageOverride, classificationProfile = null) {
   const availableLanguages = inferAvailableLanguages(runtime, text);
   const preferredLanguage = inferPreferredLanguage(runtime, text, preferredLanguageOverride);
   const executionModes = inferExecutionModes(runtime, text);
   const workflowEngines = inferWorkflowEngines(text);
+  const classificationSources = classificationProfile?.primary?.evidence_sources || ["paper_evidence", "repository_evidence"];
   return {
     algorithm: {
       name: primaryTool,
@@ -888,12 +1278,20 @@ function inferAlgorithmClassification(domain, analysisType, runtime, primaryTool
     classification: {
       primary_modality: inferPrimaryModality(domain),
       secondary_modalities: inferSecondaryModalities(domain, analysisType, text),
-      task_family: inferTaskFamily(analysisType),
-      primary_task: inferPrimaryTask(analysisType),
-      secondary_tasks: inferSecondaryTasks(analysisType),
+      task_family: inferTaskFamily(analysisType, classificationProfile),
+      primary_task: inferPrimaryTask(analysisType, classificationProfile),
+      secondary_tasks: dedupe([
+        ...inferSecondaryTasks(analysisType, classificationProfile),
+        ...ensureArray(classificationProfile?.candidates)
+          .filter((candidate) => candidate.label !== classificationProfile?.primary?.label)
+          .map((candidate) => candidate.primary_task)
+      ]),
       perturbation: inferPerturbationFacets(analysisType, primaryTool, text),
-      confidence: 0.85,
-      evidence: ["paper_evidence", "repository_evidence"]
+      classification_basis: "tutorial_application_first",
+      open_categories: openCategoriesFromProfile(classificationProfile, domain),
+      classification_notes: classificationProfile?.notes || [],
+      confidence: classificationProfile?.primary?.confidence || 0.85,
+      evidence: classificationSources
     },
     implementation: {
       languages: availableLanguages,
@@ -2198,6 +2596,7 @@ function inferOutputBundle() {
       "reproducibility",
       "reproducibility/plan.json",
       "reproducibility/execution_plan.json",
+      "reproducibility/dependency_preflight.json",
       "reproducibility/evidence_summary.json",
       "logs"
     ],
@@ -2206,6 +2605,7 @@ function inferOutputBundle() {
       "skill_name",
       "paper_title",
       "runtime_probe",
+      "preflight",
       "input_validation",
       "parameter_resolution",
       "workflow_summary",
@@ -2222,15 +2622,136 @@ function inferOutputBundle() {
   };
 }
 
-function inferReproducibilityContract() {
+function installGuidancePriorityRank(priority) {
+  return {
+    official_docs_tutorial: 0,
+    running_example_notebook_demo_script: 1,
+    dependency_file: 2,
+    readme: 3,
+    executable_environment: 4,
+    manual_fallback_rule: 5
+  }[priority] ?? 4;
+}
+
+function installGuidancePriorityForPath(filePath) {
+  const normalized = String(filePath || "").toLowerCase();
+  if (/(^|\/)(requirements(?:\.txt)?|pyproject\.toml|setup\.(?:py|cfg)|description|environment\.(?:ya?ml)|conda\.ya?ml|renv\.lock|package(?:-lock)?\.json|dockerfile|snakefile|nextflow\.config|makefile)$/.test(normalized)) {
+    return "dependency_file";
+  }
+  if (/(^|\/)(docs?|documentation|tutorials?|vignettes?|notebooks?)(\/|$)/.test(normalized)) {
+    return "official_docs_tutorial";
+  }
+  if (/(^|\/)(examples?|demos?)(\/|$)|(^|\/)inst\/manuscript(\/|$)/.test(normalized)) {
+    return "running_example_notebook_demo_script";
+  }
+  if (/(^|\/)readme(?:\.[a-z0-9]+)?$/.test(normalized)) {
+    return "readme";
+  }
+  return "manual_fallback_rule";
+}
+
+function normalizeInstallGuidanceSource(item) {
+  if (item && typeof item === "object") {
+    const sourcePath = item.source_path || item.path || item.source || "manual_fallback";
+    return {
+      source_path: sourcePath,
+      source_priority: item.source_priority || item.priority_class || installGuidancePriorityForPath(sourcePath),
+      command_or_line: item.command_or_line || item.line || item.command || item.preview || String(sourcePath)
+    };
+  }
+
+  const raw = String(item || "");
+  const matched = raw.match(/^([^:]+):\s*(.+)$/);
+  const sourcePath = matched ? matched[1].trim() : "manual_fallback";
+  return {
+    source_path: sourcePath,
+    source_priority: installGuidancePriorityForPath(sourcePath),
+    command_or_line: matched ? matched[2].trim() : raw
+  };
+}
+
+function inferInstallGuidanceSources(evidence, runtime, dependencies) {
+  const fromEvidence = [
+    ...ensureArray(evidence.structuredInstallHints),
+    ...ensureArray(evidence.installHints)
+  ].map(normalizeInstallGuidanceSource);
+
+  function isRuntimeDependencyName(item) {
+    const compact = String(item || "").trim().toLowerCase().replace(/\s+/g, "");
+    const base = compact.split("==")[0].split(">=")[0].split("<=")[0].split("~=")[0].split("!=")[0].split(">")[0].split("<")[0].split("=")[0];
+    if (base === "python" || base === "python3") {
+      return compact === base || compact.startsWith(`${base}=`) || compact.startsWith(`${base}>`) || compact.startsWith(`${base}<`) || compact.startsWith(`${base}~`) || compact.startsWith(`${base}!`);
+    }
+    return base === "r" && compact === "r";
+  }
+
+  const packageNames = ensureArray(dependencies)
+    .filter((item) => !isRuntimeDependencyName(item))
+    .map((item) => String(item).replace(/[<>=].*$/, ""));
+  let fallback = [];
+  if (runtime === "r" && packageNames.length > 0) {
+    fallback = [{
+      source_path: "metadata.dependencies",
+      source_priority: "manual_fallback_rule",
+      command_or_line: `install.packages(c(${packageNames.map((item) => JSON.stringify(item)).join(", ")}))`
+    }];
+  } else if (runtime === "cli" && packageNames.length > 0) {
+    fallback = [{
+      source_path: "metadata.dependencies",
+      source_priority: "executable_environment",
+      command_or_line: `Install executable(s) ${packageNames.join(", ")} with the official tutorial or an environment manager such as conda/mamba, ensure they are on PATH, then rerun dependency preflight.`
+    }];
+  } else if (runtime !== "cli" && packageNames.length > 0) {
+    fallback = [{
+      source_path: "metadata.dependencies",
+      source_priority: "manual_fallback_rule",
+      command_or_line: `pip install ${packageNames.join(" ")}`
+    }];
+  }
+
+  const seen = new Set();
+  return [...fromEvidence, ...fallback]
+    .filter((item) => item.command_or_line)
+    .filter((item) => {
+      const key = `${item.source_path}\0${item.command_or_line}`;
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    })
+    .sort((left, right) => (
+      installGuidancePriorityRank(left.source_priority) - installGuidancePriorityRank(right.source_priority)
+      || left.source_path.localeCompare(right.source_path)
+    ))
+    .slice(0, 8);
+}
+
+function inferReproducibilityContract(evidence = {}, runtime = "python", dependencies = []) {
   return {
     capture_items: [
       pair("Input manifest path and key state fields.", "Input manifest path and key state fields."),
       pair("Parameter-resolution sources and default rationales.", "Parameter-resolution sources and default rationales."),
       pair("Runtime probe results, planned commands, and installation records.", "Runtime probe results, planned commands, and installation records.")
     ],
+    dependency_preflight: {
+      scope: ["runtime_executables", "python_packages", "r_packages"],
+      install_requires_confirmation: true,
+      retry_after_environment_change: true,
+      install_command_priority: [
+        "official_docs_tutorial",
+        "running_example_notebook_demo_script",
+        "dependency_file",
+        "readme",
+        "executable_environment",
+        "manual_fallback_rule"
+      ]
+    },
+    install_guidance_sources: inferInstallGuidanceSources(evidence, runtime, dependencies),
     install_policy: [
-      pair("If the target runtime environment lacks dependencies, install them only inside that environment and record the commands under reproducibility.", "If the target runtime environment lacks dependencies, install them only inside that environment and record the commands under reproducibility.")
+      pair("If the target runtime environment lacks dependencies, first report the missing packages and installation options; install only after explicit user confirmation.", "If the target runtime environment lacks dependencies, first report the missing packages and installation options; install only after explicit user confirmation."),
+      pair("If the user changes environments, rerun dependency preflight before attempting execution.", "If the user changes environments, rerun dependency preflight before attempting execution."),
+      pair("Prefer installation commands found in official tutorials or documentation before dependency-file and README fallbacks.", "Prefer installation commands found in official tutorials or documentation before dependency-file and README fallbacks.")
     ]
   };
 }
@@ -2417,6 +2938,11 @@ function annotateClaimEvidence(spec) {
     facet.evidence_id = stableEvidenceId(`perturbation.${facetName}`, facet.value);
     facet.evidence_sources = ensureEvidenceSourceIds(facet.evidence || [], `perturbation.${facetName}`);
   }
+  classification.open_categories = ensureArray(classification.open_categories).map((item) => ({
+    ...item,
+    evidence_id: item.evidence_id || stableEvidenceId(`classification.open_category.${item.axis || "task"}`, item.label),
+    evidence_sources: ensureEvidenceSourceIds(item.evidence_sources || item.evidence || [], `classification.open_category.${item.label}`)
+  }));
 
   const parameterGroups = ["user_required", "auto_detected", "literature_defaults", "wrapper_defaults"];
   for (const group of parameterGroups) {
@@ -2585,7 +3111,8 @@ function buildSpec(args, repoEvidence, paperEvidence) {
     collectPaperTextCorpus(paperEvidence)
   ].filter(Boolean).join("\n\n");
   const domain = inferDomain(text, args.domain);
-  const analysisType = inferAnalysisType(text, args["analysis-type"]);
+  const classificationProfile = inferClassificationProfile(repoEvidence, paperEvidence, args["analysis-type"]);
+  const analysisType = inferAnalysisType(classificationProfile, args["analysis-type"]);
   const runtime = inferRuntime(repoEvidence, text, args["tool-runtime"]);
   const primaryTool = inferPrimaryTool(repoEvidence, paperTitle, args["primary-tool"]);
   const skillName = inferSkillName(primaryTool, args["skill-name"]);
@@ -2593,6 +3120,7 @@ function buildSpec(args, repoEvidence, paperEvidence) {
   const exampleGene = inferExampleGene(repoEvidence);
   const hasExamples = ensureArray(repoEvidence.selections?.examples).length > 0;
   const inputContract = inferInputContract(domain, analysisType, exampleGene);
+  const dependencies = inferDependencies(runtime, primaryTool, text);
   const algorithmClassification = inferAlgorithmClassification(
     domain,
     analysisType,
@@ -2600,7 +3128,8 @@ function buildSpec(args, repoEvidence, paperEvidence) {
     primaryTool,
     githubUrl,
     text,
-    args["preferred-language"]
+    args["preferred-language"],
+    classificationProfile
   );
 
   const rawSpec = {
@@ -2617,7 +3146,7 @@ function buildSpec(args, repoEvidence, paperEvidence) {
       analysis_type: analysisType,
       primary_tool: primaryTool,
       tool_runtime: runtime,
-      dependencies: inferDependencies(runtime, primaryTool, text),
+      dependencies,
       trigger_keywords: inferTriggerKeywords(primaryTool, domain, analysisType, text),
       allowed_extra_flags: ["--input", "--out", "--config", "--dry-run", "--resume"],
       legacy_aliases: inferLegacyAliases(primaryTool, skillName),
@@ -2634,7 +3163,7 @@ function buildSpec(args, repoEvidence, paperEvidence) {
     executionContract: inferExecutionContract(repoEvidence, domain, analysisType, runtime, primaryTool, algorithmClassification),
     qcContract: inferQcContract(domain, analysisType, runtime),
     outputBundle: inferOutputBundle(),
-    reproducibilityContract: inferReproducibilityContract(),
+    reproducibilityContract: inferReproducibilityContract(repoEvidence, runtime, dependencies),
     testContract: {
       expected_status: "dry_run_ready",
       demo_input_manifest: inputContract.demo_input_manifest,

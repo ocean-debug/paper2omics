@@ -244,6 +244,13 @@ function buildSkillMarkdown(spec, skillName) {
   lines.push('', '## When to Use', '', renderBulletList(spec.routing.when_to_use));
   lines.push('', '## When Not to Use', '', renderBulletList(spec.routing.when_not_to_use));
   lines.push('', '## Route Elsewhere', '', renderBulletList(spec.routing.route_elsewhere));
+  lines.push('', '## Invocation Preflight', '', [
+    '- Report required inputs, key parameters, key defaults, and dependency preflight results before analysis.',
+    '- Run `plan` or `run` so the wrapper checks required runtimes plus Python/R packages in the active environment.',
+    '- If dependencies are missing, show the user environment-switch, current-environment install, and new-environment install options.',
+    '- Do not install dependencies until the user explicitly confirms an install option.',
+    '- After the user changes environments, rerun dependency preflight before execution.'
+  ].join("\n"));
   lines.push('', '## Input Formats', '', spec.inputContract.formats.map((item) => '- `' + item.name + '`: ' + item.en).join("\n"));
   lines.push('', '## Data / State Requirements', '', '### Required Manifest Fields', '', spec.inputContract.required_manifest_fields.map((item) => '- `' + item + '`').join("\n"));
   lines.push('', '### File-Backed Fields', '', spec.inputContract.file_fields.map((item) => '- `' + item.path + '`: ' + item.en).join("\n"));
@@ -836,6 +843,17 @@ function buildEvidenceReport(spec) {
   const parameterPriority = spec.parameterPolicy.evidence_priority || [];
   const classificationSources = classBlock.evidence || [];
   const implementationSources = implementation.evidence || [];
+  const openCategoryBlocks = (classBlock.open_categories || []).map((item) => renderTraceBlock({
+    claim: `classification.open_category.${item.axis || "task"}`,
+    value: item.label || "unknown",
+    priority: item.source_priority || sourcePriorityForSources(item.evidence_sources || item.evidence, workflowPriority, "paper_methods"),
+    sources: item.evidence_sources || item.evidence,
+    evidenceId: item.evidence_id,
+    rationale: item.confidence !== undefined ? `Confidence: ${item.confidence}` : undefined
+  })).join("\n\n") || "- None";
+  const classificationNotes = (classBlock.classification_notes || []).length > 0
+    ? classBlock.classification_notes.map((item) => `- ${item}`).join("\n")
+    : "- None";
 
   const parameterSections = [
     ["User required", spec.parameterPolicy.user_required],
@@ -870,6 +888,12 @@ function buildEvidenceReport(spec) {
     renderTraceBlock({
       claim: "classification.secondary_tasks",
       value: (classBlock.secondary_tasks || []).join(", ") || "none",
+      priority: sourcePriorityForSources(classificationSources, workflowPriority, "paper_methods"),
+      sources: classificationSources
+    }),
+    renderTraceBlock({
+      claim: "classification.classification_basis",
+      value: classBlock.classification_basis || "legacy_rule",
       priority: sourcePriorityForSources(classificationSources, workflowPriority, "paper_methods"),
       sources: classificationSources
     }),
@@ -910,6 +934,14 @@ ${renderEvidenceList(spec.parameterPolicy.evidence_priority)}
 ## Classification Evidence
 
 ${classificationBlocks}
+
+### Classification Notes
+
+${classificationNotes}
+
+## Open Classification Categories
+
+${openCategoryBlocks}
 
 ### Perturbation Facets
 
@@ -1023,6 +1055,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import importlib.util
 import json
 import os
 import shutil
@@ -1041,6 +1074,11 @@ PARAMETER_SCHEMA = json.loads(r'''${parameterSchemaJson}''')
 FORCED_MISSING = {
     item.strip()
     for item in os.environ.get("CODEX_FORCE_MISSING_EXECUTABLES", "").split(",")
+    if item.strip()
+}
+FORCED_MISSING_PACKAGES = {
+    item.strip().lower()
+    for item in os.environ.get("CODEX_FORCE_MISSING_PACKAGES", "").split(",")
     if item.strip()
 }
 
@@ -1339,6 +1377,302 @@ def runtime_probe():
     return {
         "status": overall,
         "targets": targets
+    }
+
+
+def dependency_base_name(name: str):
+    normalized = str(name).strip()
+    base = normalized.split("==")[0].split(">=")[0].split("<=")[0].split("~=")[0].split("!=")[0].split(">")[0].split("<")[0].split("=")[0]
+    return base.strip()
+
+
+def python_requirement_base_name(name: str):
+    base = dependency_base_name(str(name).split(";", 1)[0])
+    return base.split("[", 1)[0].strip()
+
+
+def is_runtime_dependency(name: str):
+    compact = "".join(str(name).strip().lower().split())
+    base = dependency_base_name(compact).lower()
+    if base in {"python", "python3"}:
+        return compact == base or compact.startswith((base + "=", base + ">", base + "<", base + "~", base + "!"))
+    return base == "r" and compact == "r"
+
+
+def package_import_candidates(name: str):
+    base = python_requirement_base_name(name)
+    if not base or base.lower() in {"python", "r"}:
+        return []
+    values = [base, base.lower(), base.replace("-", "_"), base.lower().replace("-", "_")]
+    aliases = {
+        "scikit-learn": "sklearn",
+        "pillow": "PIL",
+        "pyyaml": "yaml"
+    }
+    if base.lower() in aliases:
+        values.append(aliases[base.lower()])
+    deduped = []
+    for value in values:
+        if value and value not in deduped:
+            deduped.append(value)
+    return deduped
+
+
+def cli_executable_candidates(name: str):
+    base = dependency_base_name(name)
+    if not base or base.lower() in {"python", "r"}:
+        return []
+    values = [base, base.lower(), base.replace("_", "-"), base.lower().replace("_", "-")]
+    deduped = []
+    for value in values:
+        if value and value not in deduped:
+            deduped.append(value)
+    return deduped
+
+
+def dependency_package_specs():
+    runtime = str(SPEC.get("metadata", {}).get("tool_runtime", "python")).lower()
+    specs = []
+    for dependency in SPEC.get("metadata", {}).get("dependencies", []):
+        name = str(dependency)
+        if is_runtime_dependency(name):
+            continue
+        if runtime == "r":
+            language = "r"
+        elif runtime == "cli":
+            language = "cli"
+        else:
+            language = "python"
+        specs.append({
+            "name": name,
+            "language": language,
+            "required": True,
+            "import_candidates": package_import_candidates(name),
+            "executable_candidates": cli_executable_candidates(name)
+        })
+    return specs
+
+
+def probe_python_package(spec):
+    name = spec["name"]
+    package_name = python_requirement_base_name(name)
+    if name.lower() in FORCED_MISSING_PACKAGES:
+        return {
+            "name": name,
+            "package_name": package_name,
+            "language": "python",
+            "required": spec.get("required", True),
+            "available": False,
+            "status": "fail",
+            "checked_candidates": spec.get("import_candidates", []),
+            "reason": "Forced missing by CODEX_FORCE_MISSING_PACKAGES."
+        }
+    for candidate in spec.get("import_candidates", []):
+        if candidate.lower() in FORCED_MISSING_PACKAGES:
+            continue
+        if importlib.util.find_spec(candidate) is not None:
+            return {
+                "name": name,
+                "package_name": package_name,
+                "language": "python",
+                "required": spec.get("required", True),
+                "available": True,
+                "status": "pass",
+                "import_name": candidate,
+                "checked_candidates": spec.get("import_candidates", [])
+            }
+    return {
+        "name": name,
+        "package_name": package_name,
+        "language": "python",
+        "required": spec.get("required", True),
+        "available": False,
+        "status": "fail" if spec.get("required", True) else "warn",
+        "checked_candidates": spec.get("import_candidates", [])
+    }
+
+
+def probe_cli_dependency(spec):
+    name = spec["name"]
+    if name.lower() in FORCED_MISSING_PACKAGES:
+        return {
+            "name": name,
+            "language": "cli",
+            "required": spec.get("required", True),
+            "available": False,
+            "status": "fail",
+            "checked_candidates": spec.get("executable_candidates", []),
+            "reason": "Forced missing by CODEX_FORCE_MISSING_PACKAGES."
+        }
+    for candidate in spec.get("executable_candidates", []):
+        if candidate.lower() in FORCED_MISSING_PACKAGES:
+            continue
+        executable_path = shutil.which(candidate)
+        if executable_path:
+            return {
+                "name": name,
+                "language": "cli",
+                "required": spec.get("required", True),
+                "available": True,
+                "status": "pass",
+                "executable": candidate,
+                "executable_path": executable_path,
+                "checked_candidates": spec.get("executable_candidates", [])
+            }
+    return {
+        "name": name,
+        "language": "cli",
+        "required": spec.get("required", True),
+        "available": False,
+        "status": "fail" if spec.get("required", True) else "warn",
+        "checked_candidates": spec.get("executable_candidates", [])
+    }
+
+
+def probe_r_package(spec, runtime):
+    name = spec["name"]
+    package_name = dependency_base_name(name)
+    rscript = runtime.get("targets", {}).get("Rscript") or runtime.get("targets", {}).get("R")
+    executable = (rscript or {}).get("path") or shutil.which((rscript or {}).get("executable") or "Rscript")
+    if not executable:
+        return {
+            "name": name,
+            "package_name": package_name,
+            "language": "r",
+            "required": spec.get("required", True),
+            "available": None,
+            "status": "skipped",
+            "reason": "Rscript is unavailable; package check will be retried after runtime is available."
+        }
+    if name.lower() in FORCED_MISSING_PACKAGES:
+        return {
+            "name": name,
+            "package_name": package_name,
+            "language": "r",
+            "required": spec.get("required", True),
+            "available": False,
+            "status": "fail",
+            "reason": "Forced missing by CODEX_FORCE_MISSING_PACKAGES."
+        }
+    env = os.environ.copy()
+    env["PAPER2OMICS_R_PACKAGE_NAME"] = package_name
+    completed = subprocess.run(
+        [executable, "-e", "pkg <- Sys.getenv('PAPER2OMICS_R_PACKAGE_NAME'); quit(status = ifelse(requireNamespace(pkg, quietly = TRUE), 0, 1))"],
+        capture_output=True,
+        text=True,
+        env=env
+    )
+    return {
+        "name": name,
+        "package_name": package_name,
+        "language": "r",
+        "required": spec.get("required", True),
+        "available": completed.returncode == 0,
+        "status": "pass" if completed.returncode == 0 else ("fail" if spec.get("required", True) else "warn"),
+        "stderr": completed.stderr[-500:] if completed.stderr else ""
+    }
+
+
+def package_probe(runtime):
+    records = []
+    statuses = []
+    for spec in dependency_package_specs():
+        if spec["language"] == "python":
+            record = probe_python_package(spec)
+        elif spec["language"] == "cli":
+            record = probe_cli_dependency(spec)
+        elif spec["language"] == "r":
+            record = probe_r_package(spec, runtime)
+        else:
+            record = {
+                "name": spec["name"],
+                "language": spec["language"],
+                "required": spec.get("required", True),
+                "available": None,
+                "status": "skipped",
+                "reason": "Unsupported package language for automatic probing."
+            }
+        records.append(record)
+        statuses.append(record["status"])
+
+    overall = "pass"
+    if "fail" in statuses:
+        overall = "fail"
+    elif "warn" in statuses:
+        overall = "warn"
+    elif "skipped" in statuses:
+        overall = "skipped"
+    return {
+        "status": overall,
+        "packages": records
+    }
+
+
+def key_parameter_records(effective_parameters):
+    records = []
+    for record in effective_parameters["legacy_parameter_resolution"]["records"]:
+        if record["category"] in {"user_required", "auto_detected"}:
+            records.append(record)
+    return records
+
+
+def default_parameter_records(effective_parameters):
+    records = []
+    for record in effective_parameters["legacy_parameter_resolution"]["records"]:
+        if record["category"] in {"literature_defaults", "wrapper_defaults"}:
+            records.append(record)
+    return records
+
+
+def install_guidance(missing_dependencies):
+    sources = SPEC.get("reproducibilityContract", {}).get("install_guidance_sources") or []
+    commands = [
+        {
+            "source_path": item.get("source_path"),
+            "source_priority": item.get("source_priority"),
+            "command_or_line": item.get("command_or_line")
+        }
+        for item in sources
+        if item.get("command_or_line")
+    ]
+    missing = ", ".join(missing_dependencies) if missing_dependencies else "the missing dependencies"
+    return {
+        "requires_user_confirmation": True,
+        "message": "Do not install automatically. Ask the user to confirm one option, then rerun preflight after any environment change.",
+        "options": [
+            {
+                "name": "change_environment",
+                "description": f"Switch to an environment that already contains {missing}, then rerun plan or run."
+            },
+            {
+                "name": "install_current_environment",
+                "description": "Install in the current active environment only after explicit user confirmation.",
+                "preferred_commands": commands
+            },
+            {
+                "name": "create_new_environment",
+                "description": "Create a clean environment, install dependencies using tutorial or dependency-file guidance, then rerun preflight.",
+                "preferred_commands": commands
+            }
+        ]
+    }
+
+
+def build_preflight(runtime, effective_parameters):
+    packages = package_probe(runtime)
+    missing_dependencies = [
+        item["name"]
+        for item in packages["packages"]
+        if item["status"] == "fail" and item.get("required", True)
+    ]
+    return {
+        "required_inputs": SPEC.get("algorithmClassification", {}).get("required_inputs", []),
+        "key_parameters": key_parameter_records(effective_parameters),
+        "default_parameters": default_parameter_records(effective_parameters),
+        "runtime_probe": runtime,
+        "package_probe": packages,
+        "missing_dependencies": missing_dependencies,
+        "install_guidance": install_guidance(missing_dependencies)
     }
 
 
@@ -1657,6 +1991,7 @@ def materialize_bundle(out_dir: Path, result, commands, manifest_path: Path):
     write_json(out_dir / "qc" / "input_validation.json", result["input_validation"])
     write_json(out_dir / "qc" / "runtime_probe.json", result["runtime_probe"])
     write_json(out_dir / "qc" / "qc_summary.json", result["qc_summary"])
+    write_json(out_dir / "reproducibility" / "dependency_preflight.json", result["preflight"])
     write_json(out_dir / "workflow" / "steps.json", result["workflow_summary"]["steps"])
     write_json(out_dir / "workflow" / "dag_edges.json", result["workflow_summary"]["dag_edges"])
     write_json(out_dir / "reproducibility" / "execution_plan.json", {
@@ -1714,6 +2049,7 @@ def command_plan(args):
     runtime = runtime_probe()
     input_validation = validate_input_contract(manifest, base_dir)
     effective_parameters = resolve_effective_parameters(args, manifest, config, runtime)
+    preflight = build_preflight(runtime, effective_parameters)
     parameter_resolution = effective_parameters["legacy_parameter_resolution"]
     workflow = workflow_summary()
     evidence = evidence_summary(parameter_resolution)
@@ -1722,6 +2058,7 @@ def command_plan(args):
         "generated_at": now_iso(),
         "skill_name": SPEC["skillName"],
         "runtime_probe": runtime,
+        "preflight": preflight,
         "input_validation": input_validation,
         "effective_parameters": effective_parameters,
         "parameter_resolution": parameter_resolution,
@@ -1739,6 +2076,7 @@ def command_plan(args):
         write_json(out_dir / "parameters" / "effective_parameters.json", effective_parameters)
         write_json(out_dir / "parameters" / "resolved_parameters.json", parameter_resolution)
         write_json(out_dir / "reproducibility" / "evidence_summary.json", evidence)
+        write_json(out_dir / "reproducibility" / "dependency_preflight.json", preflight)
     print(json_dump(payload))
     return 0
 
@@ -1749,6 +2087,7 @@ def command_run(args):
     runtime = runtime_probe()
     input_validation = validate_input_contract(manifest, base_dir)
     effective_parameters = resolve_effective_parameters(args, manifest, config, runtime)
+    preflight = build_preflight(runtime, effective_parameters)
     parameter_resolution = effective_parameters["legacy_parameter_resolution"]
     workflow = workflow_summary()
     evidence = evidence_summary(parameter_resolution)
@@ -1762,6 +2101,8 @@ def command_run(args):
         status = "dry_run_ready"
     elif runtime["status"] == "fail":
         status = "blocked_runtime_missing"
+    elif preflight["package_probe"]["status"] == "fail":
+        status = "blocked_dependencies_missing"
     elif not SPEC["executionContract"].get("supports_native_run", False):
         status = "native_execution_not_enabled"
     else:
@@ -1774,6 +2115,7 @@ def command_run(args):
         "skill_name": SPEC["skillName"],
         "paper_title": SPEC["paperTitle"],
         "runtime_probe": runtime,
+        "preflight": preflight,
         "input_validation": input_validation,
         "effective_parameters": effective_parameters,
         "parameter_resolution": parameter_resolution,
@@ -1798,7 +2140,7 @@ def command_run(args):
 
     materialize_bundle(out_dir, result, commands, manifest_path)
     print(json_dump(result))
-    return 0 if result["status"] not in {"invalid_input_contract", "blocked_runtime_missing", "native_execution_failed"} else 1
+    return 0 if result["status"] not in {"invalid_input_contract", "blocked_runtime_missing", "blocked_dependencies_missing", "native_execution_failed"} else 1
 
 
 def command_validate_output(args):
@@ -1828,6 +2170,7 @@ def command_validate_output(args):
             "workflow/steps.json",
             "workflow/dag_edges.json",
             "reproducibility/execution_plan.json",
+            "reproducibility/dependency_preflight.json",
             "reproducibility/evidence_summary.json"
         ]:
             target = out_dir / relative

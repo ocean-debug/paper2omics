@@ -95,6 +95,13 @@ class ContractSpecBuilderTests(unittest.TestCase):
                 spec["algorithmClassification"]["classification"]["primary_task"],
                 "perturbation_analysis"
             )
+            open_category = spec["algorithmClassification"]["classification"]["open_categories"][0]
+            self.assertEqual(open_category["label"], "virtual_gene_knockout")
+            self.assertEqual(open_category["hierarchy"]["source"], "paper2omics_open_taxonomy")
+            self.assertEqual(open_category["hierarchy"]["domain"], "singlecell")
+            self.assertEqual(open_category["hierarchy"]["task"], "virtual_gene_knockout")
+            external_taxonomy_marker = "".join(["omics", "claw"])
+            self.assertNotIn(external_taxonomy_marker, json.dumps(spec).lower())
             self.assertEqual(
                 spec["algorithmClassification"]["classification"]["perturbation"]["target_type"]["value"],
                 "gene"
@@ -116,6 +123,17 @@ class ContractSpecBuilderTests(unittest.TestCase):
             self.assertIn("wt_counts.csv", spec["testContract"]["demo_files"])
             self.assertTrue(spec["references"]["methods"])
             self.assertTrue(spec["references"]["papers"])
+            dependency_preflight = spec["reproducibilityContract"]["dependency_preflight"]
+            self.assertEqual(
+                dependency_preflight["scope"],
+                ["runtime_executables", "python_packages", "r_packages"]
+            )
+            self.assertEqual(dependency_preflight["install_requires_confirmation"], True)
+            self.assertEqual(
+                dependency_preflight["install_command_priority"][0],
+                "official_docs_tutorial"
+            )
+            self.assertTrue(spec["reproducibilityContract"]["install_guidance_sources"])
             step_ids = [step["id"] for step in spec["executionContract"]["workflow_steps"]]
             self.assertIn("05_calculate_differential_regulation", step_ids)
             self.assertTrue(all("script" in step for step in spec["executionContract"]["workflow_steps"]))
@@ -278,6 +296,8 @@ class ContractSpecBuilderTests(unittest.TestCase):
             self.assertEqual(skill["implementation"]["preferred_language"], "python")
             self.assertIn("DAG Edge Evidence", evidence_report)
             self.assertIn("Evidence ID:", evidence_report)
+            self.assertIn("classification.classification_basis", evidence_report)
+            self.assertIn("## Open Classification Categories", evidence_report)
             generated_skill = (target / "SKILL.md").read_text(encoding="utf-8")
             for forbidden in ["Paper /", "Status /", "Input /", "Output /", "bi" + "lingual", "notebook" + "_only"]:
                 self.assertNotIn(forbidden, generated_skill)
@@ -309,7 +329,19 @@ class ContractSpecBuilderTests(unittest.TestCase):
                                 {"path": "src/workflow_engine_tool.py", "preview": "import pandas as pd"}
                             ],
                             "examples": []
-                        }
+                        },
+                        "structuredInstallHints": [
+                            {
+                                "source_path": "docs/tutorial.md",
+                                "source_priority": "official_docs_tutorial",
+                                "command_or_line": "pip install workflow-engine-tool[tutorial]"
+                            },
+                            {
+                                "source_path": "requirements.txt",
+                                "source_priority": "dependency_file",
+                                "command_or_line": "pip install workflow-engine-tool"
+                            }
+                        ]
                     },
                     indent=2
                 ),
@@ -339,6 +371,582 @@ class ContractSpecBuilderTests(unittest.TestCase):
             self.assertIn("snakemake", implementation["workflow_engines"])
             self.assertIn("nextflow", implementation["workflow_engines"])
             self.assertIn("cwl", implementation["workflow_engines"])
+            sources = spec["reproducibilityContract"]["install_guidance_sources"]
+            self.assertEqual(sources[0]["source_path"], "docs/tutorial.md")
+            self.assertIn("[tutorial]", sources[0]["command_or_line"])
+
+    def test_cli_install_guidance_does_not_fallback_to_pip(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            evidence_path = Path(tmp_dir) / "cli-evidence.json"
+            spec_path = Path(tmp_dir) / "cli-contract.json"
+            evidence_path.write_text(
+                json.dumps(
+                    {
+                        "repo": {
+                            "repo": "FastqcWrapper",
+                            "githubUrl": "https://github.com/example/FastqcWrapper"
+                        },
+                        "selections": {
+                            "readme": [
+                                {
+                                    "path": "README.md",
+                                    "preview": "Run fastqc input.fastq.gz to generate quality reports."
+                                }
+                            ],
+                            "entrypoints": [],
+                            "examples": [],
+                            "dependencies": []
+                        }
+                    },
+                    indent=2
+                ),
+                encoding="utf-8"
+            )
+            completed = self.run_node(
+                SPEC_BUILDER,
+                "--paper-title",
+                "FastqcWrapper",
+                "--paper-url",
+                "https://example.org/fastqc-wrapper",
+                "--github-url",
+                "https://github.com/example/FastqcWrapper",
+                "--evidence-file",
+                str(evidence_path),
+                "--tool-runtime",
+                "cli",
+                "--primary-tool",
+                "fastqc",
+                "--out",
+                str(spec_path)
+            )
+            self.assertEqual(completed.returncode, 0, msg=completed.stderr)
+
+            spec = json.loads(spec_path.read_text(encoding="utf-8"))
+            sources = spec["reproducibilityContract"]["install_guidance_sources"]
+            self.assertTrue(sources)
+            self.assertTrue(all("pip install" not in item["command_or_line"] for item in sources))
+            self.assertEqual(sources[-1]["source_priority"], "executable_environment")
+            self.assertIn("PATH", sources[-1]["command_or_line"])
+            self.assertIn("conda", sources[-1]["command_or_line"])
+
+    def test_python_prefixed_packages_remain_in_install_guidance_fallback(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            evidence_path = Path(tmp_dir) / "python-prefixed-evidence.json"
+            spec_path = Path(tmp_dir) / "python-prefixed-contract.json"
+            evidence_path.write_text(
+                json.dumps(
+                    {
+                        "repo": {
+                            "repo": "PythonIgraphWorkflow",
+                            "githubUrl": "https://github.com/example/PythonIgraphWorkflow"
+                        },
+                        "selections": {
+                            "readme": [
+                                {
+                                    "path": "README.md",
+                                    "preview": "Run graph analysis with python-igraph."
+                                }
+                            ],
+                            "entrypoints": [],
+                            "examples": [],
+                            "dependencies": []
+                        }
+                    },
+                    indent=2
+                ),
+                encoding="utf-8"
+            )
+            completed = self.run_node(
+                SPEC_BUILDER,
+                "--paper-title",
+                "PythonIgraphWorkflow",
+                "--paper-url",
+                "https://example.org/python-igraph-workflow",
+                "--github-url",
+                "https://github.com/example/PythonIgraphWorkflow",
+                "--evidence-file",
+                str(evidence_path),
+                "--tool-runtime",
+                "python",
+                "--primary-tool",
+                "python-igraph",
+                "--out",
+                str(spec_path)
+            )
+            self.assertEqual(completed.returncode, 0, msg=completed.stderr)
+
+            spec = json.loads(spec_path.read_text(encoding="utf-8"))
+            sources = spec["reproducibilityContract"]["install_guidance_sources"]
+            fallback = next(item for item in sources if item["source_path"] == "metadata.dependencies")
+            self.assertIn("python-igraph", fallback["command_or_line"])
+            self.assertNotIn("python>=3.10", fallback["command_or_line"])
+
+    def test_legacy_install_hints_rank_docs_before_dockerfile(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            evidence_path = Path(tmp_dir) / "legacy-install-hints-evidence.json"
+            spec_path = Path(tmp_dir) / "legacy-install-hints-contract.json"
+            evidence_path.write_text(
+                json.dumps(
+                    {
+                        "repo": {
+                            "repo": "LegacyHints",
+                            "githubUrl": "https://github.com/example/LegacyHints"
+                        },
+                        "installHints": [
+                            "Dockerfile: RUN pip install container-only-demo",
+                            "docs/tutorial.md: conda install -c bioconda demo-omics"
+                        ],
+                        "selections": {
+                            "readme": [],
+                            "dependencies": [],
+                            "entrypoints": [],
+                            "examples": []
+                        }
+                    },
+                    indent=2
+                ),
+                encoding="utf-8"
+            )
+            completed = self.run_node(
+                SPEC_BUILDER,
+                "--paper-title",
+                "LegacyHints",
+                "--paper-url",
+                "https://example.org/legacy-hints",
+                "--github-url",
+                "https://github.com/example/LegacyHints",
+                "--evidence-file",
+                str(evidence_path),
+                "--tool-runtime",
+                "python",
+                "--primary-tool",
+                "demo-omics",
+                "--out",
+                str(spec_path)
+            )
+            self.assertEqual(completed.returncode, 0, msg=completed.stderr)
+
+            spec = json.loads(spec_path.read_text(encoding="utf-8"))
+            sources = spec["reproducibilityContract"]["install_guidance_sources"]
+            self.assertEqual(sources[0]["source_path"], "docs/tutorial.md")
+            self.assertEqual(sources[0]["source_priority"], "official_docs_tutorial")
+            docker_hint = next(item for item in sources if item["source_path"] == "Dockerfile")
+            self.assertEqual(docker_hint["source_priority"], "dependency_file")
+
+    def test_classification_prefers_tutorial_application_over_abstract(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            evidence_path = Path(tmp_dir) / "trajectory-evidence.json"
+            paper_path = Path(tmp_dir) / "trajectory-paper.json"
+            spec_path = Path(tmp_dir) / "trajectory-contract.json"
+            evidence_path.write_text(
+                json.dumps(
+                    {
+                        "repo": {
+                            "repo": "TrajectoryIntentTool",
+                            "githubUrl": "https://github.com/example/TrajectoryIntentTool"
+                        },
+                        "selections": {
+                            "docs": [
+                                {
+                                    "path": "docs/tutorial.md",
+                                    "preview": "Tutorial: run trajectory transition analysis, infer fate transition maps, and visualize cell state transitions."
+                                }
+                            ],
+                            "examples": [
+                                {
+                                    "path": "examples/trajectory_transition_demo.py",
+                                    "preview": "run_trajectory_transition_analysis(adata); plot_fate_transition_map(adata)"
+                                }
+                            ],
+                            "entrypoints": [
+                                {
+                                    "path": "trajectory_intent_tool/api.py",
+                                    "preview": "def run_trajectory_transition_analysis(adata): return adata"
+                                }
+                            ],
+                            "readme": [
+                                {
+                                    "path": "README.md",
+                                    "preview": "A package for single-cell trajectory applications."
+                                }
+                            ],
+                            "dependencies": [
+                                {
+                                    "path": "pyproject.toml",
+                                    "preview": "[project]\nname='trajectory-intent-tool'"
+                                }
+                            ]
+                        }
+                    },
+                    indent=2
+                ),
+                encoding="utf-8"
+            )
+            paper_path.write_text(
+                json.dumps(
+                    {
+                        "paper": {
+                            "requestedTitle": "TrajectoryIntentTool",
+                            "resolvedTitle": "TrajectoryIntentTool",
+                            "sourceType": "fixture",
+                            "abstract": "We present a general integration benchmark algorithm for comparing latent spaces across datasets."
+                        }
+                    },
+                    indent=2
+                ),
+                encoding="utf-8"
+            )
+            completed = self.run_node(
+                SPEC_BUILDER,
+                "--paper-title",
+                "TrajectoryIntentTool",
+                "--paper-evidence-file",
+                str(paper_path),
+                "--github-url",
+                "https://github.com/example/TrajectoryIntentTool",
+                "--evidence-file",
+                str(evidence_path),
+                "--out",
+                str(spec_path)
+            )
+            self.assertEqual(completed.returncode, 0, msg=completed.stderr)
+
+            spec = json.loads(spec_path.read_text(encoding="utf-8"))
+            classification = spec["algorithmClassification"]["classification"]
+            self.assertEqual(spec["metadata"]["analysis_type"], "trajectory_transition_analysis")
+            self.assertEqual(classification["primary_task"], "trajectory_transition_analysis")
+            self.assertEqual(classification["classification_basis"], "tutorial_application_first")
+            self.assertIn("integration", classification["secondary_tasks"])
+            self.assertTrue(any("abstract" in note for note in classification["classification_notes"]))
+            for item in classification["open_categories"]:
+                for required_key in ["axis", "label", "confidence", "source_priority", "evidence_id", "evidence_sources"]:
+                    self.assertIn(required_key, item)
+                self.assertTrue(item["evidence_sources"])
+            primary = classification["open_categories"][0]
+            self.assertEqual(primary["label"], "trajectory_transition_analysis")
+            self.assertEqual(primary["source_priority"], "running_example_notebook_demo_script")
+
+    def test_classification_allows_new_open_category_without_generic_fallback(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            evidence_path = Path(tmp_dir) / "pathway-score-evidence.json"
+            spec_path = Path(tmp_dir) / "pathway-score-contract.json"
+            evidence_path.write_text(
+                json.dumps(
+                    {
+                        "repo": {
+                            "repo": "MetaboPathScore",
+                            "githubUrl": "https://github.com/example/MetaboPathScore"
+                        },
+                        "selections": {
+                            "docs": [
+                                {
+                                    "path": "vignettes/pathway_activity_scoring.md",
+                                    "preview": "Vignette: calculate pathway activity scoring from metabolite abundance tables and rank metabolic pathway activity."
+                                }
+                            ],
+                            "entrypoints": [
+                                {
+                                    "path": "metabopathscore/core.py",
+                                    "preview": "def score_pathway_activity(metabolite_table, pathway_sets): return scores"
+                                }
+                            ],
+                            "examples": [],
+                            "readme": [],
+                            "dependencies": []
+                        }
+                    },
+                    indent=2
+                ),
+                encoding="utf-8"
+            )
+            completed = self.run_node(
+                SPEC_BUILDER,
+                "--paper-title",
+                "MetaboPathScore: pathway activity scoring for metabolomics",
+                "--paper-url",
+                "https://example.org/metabopathscore",
+                "--github-url",
+                "https://github.com/example/MetaboPathScore",
+                "--evidence-file",
+                str(evidence_path),
+                "--out",
+                str(spec_path)
+            )
+            self.assertEqual(completed.returncode, 0, msg=completed.stderr)
+
+            spec = json.loads(spec_path.read_text(encoding="utf-8"))
+            classification = spec["algorithmClassification"]["classification"]
+            self.assertEqual(classification["primary_task"], "pathway_activity_scoring")
+            self.assertNotEqual(classification["primary_task"], "omics_analysis")
+            self.assertIn("pathway_activity_scoring", classification["task_family"])
+            self.assertEqual(classification["open_categories"][0]["source_priority"], "official_docs_tutorial")
+
+    def test_classification_source_priority_beats_lower_priority_keyword_density(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            evidence_path = Path(tmp_dir) / "priority-evidence.json"
+            paper_path = Path(tmp_dir) / "priority-paper.json"
+            spec_path = Path(tmp_dir) / "priority-contract.json"
+            evidence_path.write_text(
+                json.dumps(
+                    {
+                        "repo": {
+                            "repo": "PriorityClassifier",
+                            "githubUrl": "https://github.com/example/PriorityClassifier"
+                        },
+                        "selections": {
+                            "docs": [
+                                {
+                                    "path": "docs/tutorial.md",
+                                    "preview": "Tutorial: score pathway activity from a metabolomics matrix."
+                                }
+                            ],
+                            "entrypoints": [
+                                {
+                                    "path": "priority_classifier/api.py",
+                                    "preview": "def integrate_latent_spaces(adata): return adata"
+                                }
+                            ],
+                            "readme": [
+                                {
+                                    "path": "README.md",
+                                    "preview": "Integration, batch correction, Harmony, and latent space alignment."
+                                }
+                            ],
+                            "examples": [],
+                            "dependencies": []
+                        }
+                    },
+                    indent=2
+                ),
+                encoding="utf-8"
+            )
+            paper_path.write_text(
+                json.dumps(
+                    {
+                        "paper": {
+                            "requestedTitle": "PriorityClassifier",
+                            "resolvedTitle": "PriorityClassifier",
+                            "sourceType": "fixture",
+                            "abstract": "This paper studies integration, batch correction, Harmony, and latent space alignment."
+                        }
+                    },
+                    indent=2
+                ),
+                encoding="utf-8"
+            )
+            completed = self.run_node(
+                SPEC_BUILDER,
+                "--paper-title",
+                "PriorityClassifier",
+                "--paper-evidence-file",
+                str(paper_path),
+                "--github-url",
+                "https://github.com/example/PriorityClassifier",
+                "--evidence-file",
+                str(evidence_path),
+                "--out",
+                str(spec_path)
+            )
+            self.assertEqual(completed.returncode, 0, msg=completed.stderr)
+
+            spec = json.loads(spec_path.read_text(encoding="utf-8"))
+            classification = spec["algorithmClassification"]["classification"]
+            self.assertEqual(spec["metadata"]["analysis_type"], "pathway_activity_scoring")
+            self.assertEqual(classification["primary_task"], "pathway_activity_scoring")
+            self.assertEqual(classification["open_categories"][0]["source_priority"], "official_docs_tutorial")
+            self.assertIn("integration", classification["secondary_tasks"])
+
+    def test_classification_extracts_open_label_beyond_known_rules(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            evidence_path = Path(tmp_dir) / "communication-evidence.json"
+            paper_path = Path(tmp_dir) / "communication-paper.json"
+            spec_path = Path(tmp_dir) / "communication-contract.json"
+            evidence_path.write_text(
+                json.dumps(
+                    {
+                        "repo": {
+                            "repo": "CommTool",
+                            "githubUrl": "https://github.com/example/CommTool"
+                        },
+                        "selections": {
+                            "docs": [
+                                {
+                                    "path": "docs/tutorial.md",
+                                    "preview": "Tutorial: run cell-cell communication analysis from a ligand receptor matrix."
+                                }
+                            ],
+                            "examples": [
+                                {
+                                    "path": "examples/ligand_receptor_demo.py",
+                                    "preview": "run_ligand_receptor_analysis(adata)"
+                                }
+                            ],
+                            "entrypoints": [],
+                            "readme": [],
+                            "dependencies": []
+                        }
+                    },
+                    indent=2
+                ),
+                encoding="utf-8"
+            )
+            paper_path.write_text(
+                json.dumps(
+                    {
+                        "paper": {
+                            "requestedTitle": "CommTool",
+                            "resolvedTitle": "CommTool",
+                            "sourceType": "fixture",
+                            "abstract": "This method also includes integration and batch correction benchmarking."
+                        }
+                    },
+                    indent=2
+                ),
+                encoding="utf-8"
+            )
+            completed = self.run_node(
+                SPEC_BUILDER,
+                "--paper-title",
+                "CommTool",
+                "--paper-evidence-file",
+                str(paper_path),
+                "--paper-url",
+                "https://example.org/commtool",
+                "--github-url",
+                "https://github.com/example/CommTool",
+                "--evidence-file",
+                str(evidence_path),
+                "--out",
+                str(spec_path)
+            )
+            self.assertEqual(completed.returncode, 0, msg=completed.stderr)
+
+            spec = json.loads(spec_path.read_text(encoding="utf-8"))
+            classification = spec["algorithmClassification"]["classification"]
+            self.assertEqual(spec["metadata"]["analysis_type"], "cell_communication")
+            self.assertEqual(classification["primary_task"], "omics_analysis")
+            self.assertEqual(classification["open_categories"][0]["label"], "cell_communication")
+            self.assertEqual(classification["open_categories"][0]["source_priority"], "official_docs_tutorial")
+            self.assertIn("integration", [item["label"] for item in classification["open_categories"]])
+            self.assertTrue(classification["open_categories"][0]["evidence_sources"])
+
+    def test_known_task_prefers_curated_rule_over_generic_open_phrase(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            evidence_path = Path(tmp_dir) / "knockout-evidence.json"
+            paper_path = Path(tmp_dir) / "knockout-paper.json"
+            spec_path = Path(tmp_dir) / "knockout-contract.json"
+            evidence_path.write_text(
+                json.dumps(
+                    {
+                        "repo": {
+                            "repo": "KnockTool",
+                            "githubUrl": "https://github.com/example/KnockTool"
+                        },
+                        "selections": {
+                            "docs": [
+                                {
+                                    "path": "docs/tutorial.md",
+                                    "preview": "Tutorial: run virtual knockout analysis on a wild-type single-cell matrix."
+                                }
+                            ],
+                            "examples": [],
+                            "entrypoints": [],
+                            "readme": [],
+                            "dependencies": []
+                        }
+                    },
+                    indent=2
+                ),
+                encoding="utf-8"
+            )
+            paper_path.write_text(
+                json.dumps(
+                    {
+                        "paper": {
+                            "requestedTitle": "KnockTool",
+                            "resolvedTitle": "KnockTool",
+                            "sourceType": "fixture",
+                            "abstract": "A single-cell method benchmark."
+                        }
+                    },
+                    indent=2
+                ),
+                encoding="utf-8"
+            )
+            completed = self.run_node(
+                SPEC_BUILDER,
+                "--paper-title",
+                "KnockTool",
+                "--paper-evidence-file",
+                str(paper_path),
+                "--paper-url",
+                "https://example.org/knocktool",
+                "--github-url",
+                "https://github.com/example/KnockTool",
+                "--evidence-file",
+                str(evidence_path),
+                "--out",
+                str(spec_path)
+            )
+            self.assertEqual(completed.returncode, 0, msg=completed.stderr)
+
+            spec = json.loads(spec_path.read_text(encoding="utf-8"))
+            classification = spec["algorithmClassification"]["classification"]
+            self.assertEqual(spec["metadata"]["analysis_type"], "virtual-knockout")
+            self.assertNotEqual(spec["metadata"]["analysis_type"], "run_virtual_knockout_analysis")
+            self.assertEqual(classification["primary_task"], "perturbation_analysis")
+            self.assertIn(
+                "virtual_gene_knockout",
+                [item["label"] for item in classification["open_categories"]]
+            )
+
+    def test_classification_extracts_specific_open_label_for_rna_velocity(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            evidence_path = Path(tmp_dir) / "velocity-evidence.json"
+            spec_path = Path(tmp_dir) / "velocity-contract.json"
+            evidence_path.write_text(
+                json.dumps(
+                    {
+                        "repo": {
+                            "repo": "VelocityTool",
+                            "githubUrl": "https://github.com/example/VelocityTool"
+                        },
+                        "selections": {
+                            "docs": [
+                                {
+                                    "path": "docs/tutorial.md",
+                                    "preview": "Tutorial: estimate RNA velocity and visualize velocity streams."
+                                }
+                            ],
+                            "examples": [],
+                            "entrypoints": [],
+                            "readme": [],
+                            "dependencies": []
+                        }
+                    },
+                    indent=2
+                ),
+                encoding="utf-8"
+            )
+            completed = self.run_node(
+                SPEC_BUILDER,
+                "--paper-title",
+                "VelocityTool",
+                "--paper-url",
+                "https://example.org/velocitytool",
+                "--github-url",
+                "https://github.com/example/VelocityTool",
+                "--evidence-file",
+                str(evidence_path),
+                "--out",
+                str(spec_path)
+            )
+            self.assertEqual(completed.returncode, 0, msg=completed.stderr)
+
+            spec = json.loads(spec_path.read_text(encoding="utf-8"))
+            classification = spec["algorithmClassification"]["classification"]
+            self.assertEqual(spec["metadata"]["analysis_type"], "rna_velocity")
+            self.assertEqual(classification["open_categories"][0]["label"], "rna_velocity")
 
     def test_build_contract_spec_merges_article_fixture_without_explicit_title(self):
         with tempfile.TemporaryDirectory() as tmp_dir:

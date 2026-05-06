@@ -63,7 +63,7 @@ class RepoEvidenceCollectorTests(unittest.TestCase):
                 json.dumps(
                     {
                         "cells": [
-                            {"cell_type": "markdown", "source": ["# Tutorial"]},
+                            {"cell_type": "markdown", "source": ["# Tutorial\npip install demo-omics[tutorial]"]},
                             {"cell_type": "code", "source": ["import demo_omics\nadata = demo_omics.load('input.h5ad')\nadata.write_h5ad('output.h5ad')"]}
                         ],
                         "metadata": {},
@@ -93,6 +93,10 @@ class RepoEvidenceCollectorTests(unittest.TestCase):
             self.assertIn("python", payload["languages"])
             self.assertIn("docs/tutorial.ipynb", payload["pathIndex"]["notebookFiles"])
             self.assertTrue(any("pip install demo-omics" in item for item in payload["installHints"]))
+            self.assertIn("structuredInstallHints", payload)
+            self.assertEqual(payload["structuredInstallHints"][0]["source_path"], "docs/tutorial.ipynb")
+            self.assertEqual(payload["structuredInstallHints"][0]["source_priority"], "official_docs_tutorial")
+            self.assertIn("pip install demo-omics[tutorial]", payload["structuredInstallHints"][0]["command_or_line"])
             self.assertTrue(any("--help" in item for item in payload["cliHints"]))
             self.assertIn("miningMetadata", payload)
             self.assertTrue(payload["miningMetadata"]["notebooks"])
@@ -101,6 +105,48 @@ class RepoEvidenceCollectorTests(unittest.TestCase):
             self.assertTrue(payload["miningMetadata"]["variable_flow"])
             self.assertTrue(payload["miningMetadata"]["file_flow"])
             self.assertTrue(payload["miningMetadata"]["function_call_graph"])
+
+    def test_install_hint_priority_prefers_docs_over_dockerfile(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            (root / "README.md").write_text("# DemoOmics\n", encoding="utf-8")
+            (root / "Dockerfile").write_text(
+                "\n".join(
+                    [
+                        "FROM python:3.11",
+                        "RUN pip install container-only-demo",
+                        "RUN apt-get update && apt-get install -y libxml2"
+                    ]
+                ),
+                encoding="utf-8"
+            )
+            (root / "docs").mkdir()
+            (root / "docs" / "tutorial.md").write_text(
+                "\n".join(
+                    [
+                        "# Tutorial",
+                        "pip install demo-omics[tutorial]"
+                    ]
+                ),
+                encoding="utf-8"
+            )
+
+            completed = self.run_node(
+                "--github-url",
+                "https://github.com/example/DemoOmics",
+                "--local-path",
+                str(root),
+                "--max-files",
+                "20"
+            )
+            self.assertEqual(completed.returncode, 0, msg=completed.stderr)
+
+            payload = json.loads(completed.stdout)
+            hints = payload["structuredInstallHints"]
+            self.assertEqual(hints[0]["source_path"], "docs/tutorial.md")
+            self.assertEqual(hints[0]["source_priority"], "official_docs_tutorial")
+            docker_hint = next(item for item in hints if item["source_path"] == "Dockerfile")
+            self.assertEqual(docker_hint["source_priority"], "dependency_file")
 
 
 if __name__ == "__main__":

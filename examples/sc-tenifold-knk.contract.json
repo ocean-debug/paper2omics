@@ -20,7 +20,8 @@
       "secondary_tasks": [
         "virtual_gene_knockout",
         "gene_function_prediction",
-        "perturbed_gene_ranking"
+        "perturbed_gene_ranking",
+        "GRN_inference"
       ],
       "perturbation": {
         "target_type": {
@@ -128,27 +129,187 @@
           ]
         }
       },
-      "confidence": 0.85,
+      "classification_basis": "tutorial_application_first",
+      "open_categories": [
+        {
+          "axis": "task",
+          "label": "virtual_gene_knockout",
+          "confidence": 0.98,
+          "source_priority": "source_code_api",
+          "hierarchy": {
+            "source": "paper2omics_open_taxonomy",
+            "domain": "singlecell",
+            "task": "virtual_gene_knockout",
+            "skill_family": "singlecell-virtual-gene-knockout"
+          },
+          "evidence": [
+            {
+              "source": "R/dRegulation.R",
+              "path": "R/dRegulation.R",
+              "category": "source_code_api",
+              "priority_class": "source_code_api",
+              "source_priority": "source_code_api",
+              "source_type": "source_code",
+              "claim_type": "classification",
+              "snippet": "R/dRegulation.R\ndRegulation <- function(manifoldOutput, gKO) { ... }"
+            },
+            {
+              "source": "R/scTenifoldKnk.R",
+              "path": "R/scTenifoldKnk.R",
+              "category": "source_code_api",
+              "priority_class": "source_code_api",
+              "source_priority": "source_code_api",
+              "source_type": "source_code",
+              "claim_type": "classification",
+              "snippet": "R/scTenifoldKnk.R\nscTenifoldKnk <- function(countMatrix, gKO, qc = TRUE, qc_minLSize = 1000, qc_mtThreshold = 0.1) { ... }"
+            },
+            {
+              "source": "README.md",
+              "path": "README.md",
+              "category": "readme",
+              "priority_class": "readme",
+              "source_priority": "readme",
+              "source_type": "readme",
+              "claim_type": "classification",
+              "snippet": "README.md\nA R/MATLAB/Python package to perform virtual knockout experiments on single-cell gene regulatory networks. scTenifoldKnk is a machine learning workflow that performs virtual knockout experiments using single-cell RNA sequencing (s"
+            }
+          ],
+          "evidence_sources": [
+            {
+              "evidence_id": "ev_classification-open-category-virtual-gene-knockout-0_r-dregulation-r",
+              "source": "R/dRegulation.R",
+              "path": "R/dRegulation.R",
+              "source_type": "source_code",
+              "category": "source_code_api",
+              "priority_class": "source_code_api",
+              "claim_type": "classification",
+              "snippet": "R/dRegulation.R\ndRegulation <- function(manifoldOutput, gKO) { ... }"
+            },
+            {
+              "evidence_id": "ev_classification-open-category-virtual-gene-knockout-1_r-sctenifoldknk-r",
+              "source": "R/scTenifoldKnk.R",
+              "path": "R/scTenifoldKnk.R",
+              "source_type": "source_code",
+              "category": "source_code_api",
+              "priority_class": "source_code_api",
+              "claim_type": "classification",
+              "snippet": "R/scTenifoldKnk.R\nscTenifoldKnk <- function(countMatrix, gKO, qc = TRUE, qc_minLSize = 1000, qc_mtThreshold = 0.1) { ... }"
+            },
+            {
+              "evidence_id": "ev_classification-open-category-virtual-gene-knockout-2_readme-md",
+              "source": "README.md",
+              "path": "README.md",
+              "source_type": "readme",
+              "category": "readme",
+              "priority_class": "readme",
+              "claim_type": "classification",
+              "snippet": "README.md\nA R/MATLAB/Python package to perform virtual knockout experiments on single-cell gene regulatory networks. scTenifoldKnk is a machine learning workflow that performs virtual knockout experiments using single-cell RNA sequencing (s"
+            }
+          ],
+          "evidence_id": "ev_classification-open-category_virtual-gene-knockout"
+        },
+        {
+          "axis": "task",
+          "label": "gene_regulatory_network_inference",
+          "confidence": 0.64,
+          "source_priority": "readme",
+          "hierarchy": {
+            "source": "paper2omics_open_taxonomy",
+            "domain": "singlecell",
+            "task": "gene_regulatory_network_inference",
+            "skill_family": "singlecell-gene-regulatory-network-inference"
+          },
+          "evidence": [
+            {
+              "source": "README.md",
+              "path": "README.md",
+              "category": "readme",
+              "priority_class": "readme",
+              "source_priority": "readme",
+              "source_type": "readme",
+              "claim_type": "classification",
+              "snippet": "README.md\nA R/MATLAB/Python package to perform virtual knockout experiments on single-cell gene regulatory networks. scTenifoldKnk is a machine learning workflow that performs virtual knockout experiments using single-cell RNA sequencing (s"
+            }
+          ],
+          "evidence_sources": [
+            {
+              "evidence_id": "ev_classification-open-category-gene-regulatory-network-inference-0_readme-md",
+              "source": "README.md",
+              "path": "README.md",
+              "source_type": "readme",
+              "category": "readme",
+              "priority_class": "readme",
+              "claim_type": "classification",
+              "snippet": "README.md\nA R/MATLAB/Python package to perform virtual knockout experiments on single-cell gene regulatory networks. scTenifoldKnk is a machine learning workflow that performs virtual knockout experiments using single-cell RNA sequencing (s"
+            }
+          ],
+          "evidence_id": "ev_classification-open-category_gene-regulatory-network-inference"
+        }
+      ],
+      "classification_notes": [],
+      "confidence": 0.98,
       "evidence": [
-        "paper_evidence",
-        "repository_evidence"
+        {
+          "source": "R/dRegulation.R",
+          "path": "R/dRegulation.R",
+          "category": "source_code_api",
+          "priority_class": "source_code_api",
+          "source_priority": "source_code_api",
+          "source_type": "source_code",
+          "claim_type": "classification",
+          "snippet": "R/dRegulation.R\ndRegulation <- function(manifoldOutput, gKO) { ... }"
+        },
+        {
+          "source": "R/scTenifoldKnk.R",
+          "path": "R/scTenifoldKnk.R",
+          "category": "source_code_api",
+          "priority_class": "source_code_api",
+          "source_priority": "source_code_api",
+          "source_type": "source_code",
+          "claim_type": "classification",
+          "snippet": "R/scTenifoldKnk.R\nscTenifoldKnk <- function(countMatrix, gKO, qc = TRUE, qc_minLSize = 1000, qc_mtThreshold = 0.1) { ... }"
+        },
+        {
+          "source": "README.md",
+          "path": "README.md",
+          "category": "readme",
+          "priority_class": "readme",
+          "source_priority": "readme",
+          "source_type": "readme",
+          "claim_type": "classification",
+          "snippet": "README.md\nA R/MATLAB/Python package to perform virtual knockout experiments on single-cell gene regulatory networks. scTenifoldKnk is a machine learning workflow that performs virtual knockout experiments using single-cell RNA sequencing (s"
+        }
       ],
       "evidence_sources": [
         {
-          "evidence_id": "ev_classification-0_paper-evidence",
-          "source": "paper_evidence",
-          "source_type": "paper",
-          "category": "source_code_api",
-          "priority_class": "source_code_api",
-          "claim_type": "classification"
-        },
-        {
-          "evidence_id": "ev_classification-1_repository-evidence",
-          "source": "repository_evidence",
+          "evidence_id": "ev_classification-0_r-dregulation-r",
+          "source": "R/dRegulation.R",
+          "path": "R/dRegulation.R",
           "source_type": "source_code",
           "category": "source_code_api",
           "priority_class": "source_code_api",
-          "claim_type": "classification"
+          "claim_type": "classification",
+          "snippet": "R/dRegulation.R\ndRegulation <- function(manifoldOutput, gKO) { ... }"
+        },
+        {
+          "evidence_id": "ev_classification-1_r-sctenifoldknk-r",
+          "source": "R/scTenifoldKnk.R",
+          "path": "R/scTenifoldKnk.R",
+          "source_type": "source_code",
+          "category": "source_code_api",
+          "priority_class": "source_code_api",
+          "claim_type": "classification",
+          "snippet": "R/scTenifoldKnk.R\nscTenifoldKnk <- function(countMatrix, gKO, qc = TRUE, qc_minLSize = 1000, qc_mtThreshold = 0.1) { ... }"
+        },
+        {
+          "evidence_id": "ev_classification-2_readme-md",
+          "source": "README.md",
+          "path": "README.md",
+          "source_type": "readme",
+          "category": "readme",
+          "priority_class": "readme",
+          "claim_type": "classification",
+          "snippet": "README.md\nA R/MATLAB/Python package to perform virtual knockout experiments on single-cell gene regulatory networks. scTenifoldKnk is a machine learning workflow that performs virtual knockout experiments using single-cell RNA sequencing (s"
         }
       ],
       "evidence_id": "ev_classification-primary-task_perturbation-analysis"
@@ -1831,6 +1992,7 @@
       "reproducibility",
       "reproducibility/plan.json",
       "reproducibility/execution_plan.json",
+      "reproducibility/dependency_preflight.json",
       "reproducibility/evidence_summary.json",
       "logs"
     ],
@@ -1839,6 +2001,7 @@
       "skill_name",
       "paper_title",
       "runtime_probe",
+      "preflight",
       "input_validation",
       "parameter_resolution",
       "workflow_summary",
@@ -1874,10 +2037,42 @@
         "en": "Runtime probe results, planned commands, and installation records."
       }
     ],
+    "dependency_preflight": {
+      "scope": [
+        "runtime_executables",
+        "python_packages",
+        "r_packages"
+      ],
+      "install_requires_confirmation": true,
+      "retry_after_environment_change": true,
+      "install_command_priority": [
+        "official_docs_tutorial",
+        "running_example_notebook_demo_script",
+        "dependency_file",
+        "readme",
+        "executable_environment",
+        "manual_fallback_rule"
+      ]
+    },
+    "install_guidance_sources": [
+      {
+        "source_path": "metadata.dependencies",
+        "source_priority": "manual_fallback_rule",
+        "command_or_line": "install.packages(c(\"scTenifoldKnk\", \"scTenifoldNet\", \"Matrix\", \"Seurat\"))"
+      }
+    ],
     "install_policy": [
       {
-        "zh": "If the target runtime environment lacks dependencies, install them only inside that environment and record the commands under reproducibility.",
-        "en": "If the target runtime environment lacks dependencies, install them only inside that environment and record the commands under reproducibility."
+        "zh": "If the target runtime environment lacks dependencies, first report the missing packages and installation options; install only after explicit user confirmation.",
+        "en": "If the target runtime environment lacks dependencies, first report the missing packages and installation options; install only after explicit user confirmation."
+      },
+      {
+        "zh": "If the user changes environments, rerun dependency preflight before attempting execution.",
+        "en": "If the user changes environments, rerun dependency preflight before attempting execution."
+      },
+      {
+        "zh": "Prefer installation commands found in official tutorials or documentation before dependency-file and README fallbacks.",
+        "en": "Prefer installation commands found in official tutorials or documentation before dependency-file and README fallbacks."
       }
     ]
   },

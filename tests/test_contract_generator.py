@@ -181,6 +181,9 @@ class ContractGeneratorTests(unittest.TestCase):
 
             generated_skill = (target / "SKILL.md").read_text(encoding="utf-8")
             self.assertIn("Evidence ID:", generated_skill)
+            self.assertIn("## Invocation Preflight", generated_skill)
+            self.assertIn("Report required inputs, key parameters, key defaults, and dependency preflight results before analysis.", generated_skill)
+            self.assertIn("Do not install dependencies until the user explicitly confirms an install option.", generated_skill)
             for forbidden in ["bi" + "lingual", "notebook" + "_only", "Skill /", "Paper /", "Status /", "Result status /"]:
                 self.assertNotIn(forbidden, generated_skill)
 
@@ -276,9 +279,16 @@ class ContractGeneratorTests(unittest.TestCase):
                 )
                 self.assertEqual(cli_plan.returncode, 0, msg=cli_plan.stderr)
                 payload = json.loads(cli_plan.stdout)
+                self.assertIn("preflight", payload)
+                self.assertIn("required_inputs", payload["preflight"])
+                self.assertIn("key_parameters", payload["preflight"])
+                self.assertIn("default_parameters", payload["preflight"])
+                self.assertIn("package_probe", payload["preflight"])
+                self.assertIn("install_guidance", payload["preflight"])
                 effective = payload["effective_parameters"]
                 self.assertEqual(effective["effective_parameters"]["knockout_gene"], "TP53")
                 self.assertEqual(effective["parameter_sources"]["knockout_gene"], "user_cli")
+                self.assertTrue((Path(out_dir) / "reproducibility" / "dependency_preflight.json").exists())
                 self.assertTrue((Path(out_dir) / "effective_parameters.json").exists())
                 self.assertTrue((Path(out_dir) / "parameters" / "effective_parameters.json").exists())
 
@@ -356,8 +366,294 @@ class ContractGeneratorTests(unittest.TestCase):
                 self.assertEqual(dry_run.returncode, 0, msg=dry_run.stderr)
                 payload = json.loads(dry_run.stdout)
                 self.assertEqual(payload["status"], "dry_run_ready")
+                self.assertIn("preflight", payload)
                 self.assertTrue(payload["effective_parameters"]["effective_parameters"]["dry_run"])
                 self.assertEqual(payload["effective_parameters"]["parameter_sources"]["dry_run"], "user_config")
+
+    def test_generated_child_blocks_missing_packages_with_guidance(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            completed = self.run_cli(
+                "build",
+                "--paper-title",
+                "CellOracle: dissecting cell identity changes by network perturbation",
+                "--github-url",
+                "https://github.com/morris-lab/CellOracle",
+                "--evidence-file",
+                str(REPO_EVIDENCE),
+                "--out-root",
+                tmp_dir,
+                "--force"
+            )
+            self.assertEqual(completed.returncode, 0, msg=completed.stderr)
+            target = Path(completed.stdout.strip())
+            wrapper = target / "cell_oracle.py"
+            demo_input = target / "examples" / "demo_input" / "input_manifest.json"
+
+            with tempfile.TemporaryDirectory() as out_dir:
+                env = os.environ.copy()
+                env["CODEX_FORCE_MISSING_PACKAGES"] = "celloracle"
+                run = subprocess.run(
+                    [
+                        sys.executable,
+                        str(wrapper),
+                        "run",
+                        "--input",
+                        str(demo_input),
+                        "--out",
+                        out_dir
+                    ],
+                    cwd=target,
+                    capture_output=True,
+                    text=True,
+                    env=env
+                )
+                self.assertNotEqual(run.returncode, 0)
+                payload = json.loads(run.stdout)
+                self.assertEqual(payload["status"], "blocked_dependencies_missing")
+                self.assertIn(
+                    "celloracle",
+                    [item.lower() for item in payload["preflight"]["missing_dependencies"]]
+                )
+                self.assertTrue(payload["preflight"]["install_guidance"]["requires_user_confirmation"])
+                self.assertTrue(payload["preflight"]["install_guidance"]["options"])
+                self.assertTrue((Path(out_dir) / "reproducibility" / "dependency_preflight.json").exists())
+
+    def test_generated_child_keeps_python_prefixed_packages_in_preflight(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            spec = json.loads(SPEC.read_text(encoding="utf-8"))
+            spec["metadata"]["tool_runtime"] = "python"
+            spec["metadata"]["dependencies"] = [
+                "python",
+                "python>=3.10",
+                "python == 3.11",
+                "python=3.10",
+                "python-igraph",
+                "python-Levenshtein"
+            ]
+            python_spec = Path(tmp_dir) / "python-prefixed-contract.json"
+            python_spec.write_text(json.dumps(spec, ensure_ascii=False, indent=2), encoding="utf-8")
+
+            completed = self.run_node("--spec-file", str(python_spec), "--out-root", tmp_dir)
+            self.assertEqual(completed.returncode, 0, msg=completed.stderr)
+            target = Path(completed.stdout.strip())
+            wrapper = target / "sc_tenifold_knk.py"
+            demo_input = target / "examples" / "demo_input" / "input_manifest.json"
+
+            with tempfile.TemporaryDirectory() as out_dir:
+                env = os.environ.copy()
+                env["CODEX_FORCE_MISSING_PACKAGES"] = "python-igraph,python-levenshtein"
+                plan = subprocess.run(
+                    [
+                        sys.executable,
+                        str(wrapper),
+                        "plan",
+                        "--input",
+                        str(demo_input),
+                        "--out",
+                        out_dir
+                    ],
+                    cwd=target,
+                    capture_output=True,
+                    text=True,
+                    env=env
+                )
+                self.assertEqual(plan.returncode, 0, msg=plan.stderr)
+                payload = json.loads(plan.stdout)
+                packages = payload["preflight"]["package_probe"]["packages"]
+                package_names = [item["name"] for item in packages]
+                self.assertNotIn("python", package_names)
+                self.assertNotIn("python>=3.10", package_names)
+                self.assertNotIn("python == 3.11", package_names)
+                self.assertNotIn("python=3.10", package_names)
+                self.assertIn("python-igraph", package_names)
+                self.assertIn("python-Levenshtein", package_names)
+                self.assertIn("python-igraph", payload["preflight"]["missing_dependencies"])
+                self.assertIn("python-Levenshtein", payload["preflight"]["missing_dependencies"])
+
+    def test_generated_python_preflight_strips_extras_and_markers_for_import_probe(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            spec = json.loads(SPEC.read_text(encoding="utf-8"))
+            spec["metadata"]["tool_runtime"] = "python"
+            spec["metadata"]["dependencies"] = [
+                "scanpy[leiden]",
+                "celloracle[dev]",
+                "anndata>=0.10",
+                'scvi-tools[tutorials]; python_version >= "3.10"'
+            ]
+            python_spec = Path(tmp_dir) / "python-extras-contract.json"
+            python_spec.write_text(json.dumps(spec, ensure_ascii=False, indent=2), encoding="utf-8")
+
+            completed = self.run_node("--spec-file", str(python_spec), "--out-root", tmp_dir)
+            self.assertEqual(completed.returncode, 0, msg=completed.stderr)
+            target = Path(completed.stdout.strip())
+            wrapper = target / "sc_tenifold_knk.py"
+            demo_input = target / "examples" / "demo_input" / "input_manifest.json"
+
+            fake_site = Path(tmp_dir) / "fake-site"
+            fake_site.mkdir()
+            for module_name in ["scanpy", "celloracle", "anndata", "scvi_tools"]:
+                package_dir = fake_site / module_name
+                package_dir.mkdir()
+                (package_dir / "__init__.py").write_text("", encoding="utf-8")
+
+            with tempfile.TemporaryDirectory() as out_dir:
+                env = os.environ.copy()
+                env["PYTHONPATH"] = str(fake_site) + os.pathsep + env.get("PYTHONPATH", "")
+                plan = subprocess.run(
+                    [
+                        sys.executable,
+                        str(wrapper),
+                        "plan",
+                        "--input",
+                        str(demo_input),
+                        "--out",
+                        out_dir
+                    ],
+                    cwd=target,
+                    capture_output=True,
+                    text=True,
+                    env=env
+                )
+                self.assertEqual(plan.returncode, 0, msg=plan.stderr)
+                payload = json.loads(plan.stdout)
+                packages = payload["preflight"]["package_probe"]["packages"]
+                by_name = {item["name"]: item for item in packages}
+                self.assertEqual(by_name["scanpy[leiden]"]["package_name"], "scanpy")
+                self.assertEqual(by_name["scanpy[leiden]"]["import_name"], "scanpy")
+                self.assertEqual(by_name["celloracle[dev]"]["package_name"], "celloracle")
+                self.assertEqual(by_name["celloracle[dev]"]["import_name"], "celloracle")
+                self.assertEqual(by_name["anndata>=0.10"]["package_name"], "anndata")
+                self.assertEqual(by_name["anndata>=0.10"]["import_name"], "anndata")
+                scvi_spec = 'scvi-tools[tutorials]; python_version >= "3.10"'
+                self.assertEqual(by_name[scvi_spec]["package_name"], "scvi-tools")
+                self.assertEqual(by_name[scvi_spec]["import_name"], "scvi_tools")
+                self.assertEqual(payload["preflight"]["missing_dependencies"], [])
+
+    def test_generated_cli_runtime_probes_dependencies_as_executables(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            spec = json.loads(SPEC.read_text(encoding="utf-8"))
+            spec["metadata"]["tool_runtime"] = "cli"
+            spec["metadata"]["dependencies"] = ["node"]
+            cli_spec = Path(tmp_dir) / "cli-contract.json"
+            cli_spec.write_text(json.dumps(spec, ensure_ascii=False, indent=2), encoding="utf-8")
+
+            completed = self.run_node("--spec-file", str(cli_spec), "--out-root", tmp_dir)
+            self.assertEqual(completed.returncode, 0, msg=completed.stderr)
+            target = Path(completed.stdout.strip())
+            wrapper = target / "sc_tenifold_knk.py"
+            demo_input = target / "examples" / "demo_input" / "input_manifest.json"
+
+            with tempfile.TemporaryDirectory() as out_dir:
+                plan = subprocess.run(
+                    [
+                        sys.executable,
+                        str(wrapper),
+                        "plan",
+                        "--input",
+                        str(demo_input),
+                        "--out",
+                        out_dir
+                    ],
+                    cwd=target,
+                    capture_output=True,
+                    text=True
+                )
+                self.assertEqual(plan.returncode, 0, msg=plan.stderr)
+                payload = json.loads(plan.stdout)
+                packages = payload["preflight"]["package_probe"]["packages"]
+                node_probe = next(item for item in packages if item["name"] == "node")
+                self.assertEqual(node_probe["language"], "cli")
+                self.assertEqual(node_probe["status"], "pass")
+                self.assertTrue(node_probe["executable_path"])
+                self.assertEqual(payload["preflight"]["missing_dependencies"], [])
+
+    def test_generated_r_preflight_passes_package_name_via_environment(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            spec = json.loads(SPEC.read_text(encoding="utf-8"))
+            spec["metadata"]["tool_runtime"] = "r"
+            spec["metadata"]["dependencies"] = ["pkg'name"]
+            r_spec = Path(tmp_dir) / "r-contract.json"
+            r_spec.write_text(json.dumps(spec, ensure_ascii=False, indent=2), encoding="utf-8")
+
+            completed = self.run_node("--spec-file", str(r_spec), "--out-root", tmp_dir)
+            self.assertEqual(completed.returncode, 0, msg=completed.stderr)
+            target = Path(completed.stdout.strip())
+            wrapper = target / "sc_tenifold_knk.py"
+            wrapper_text = wrapper.read_text(encoding="utf-8")
+            self.assertIn("PAPER2OMICS_R_PACKAGE_NAME", wrapper_text)
+            self.assertIn("Sys.getenv('PAPER2OMICS_R_PACKAGE_NAME')", wrapper_text)
+            self.assertNotIn("requireNamespace('{name}'", wrapper_text)
+
+    def test_generated_r_preflight_strips_version_specs_for_namespace_probe(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            spec = json.loads(SPEC.read_text(encoding="utf-8"))
+            spec["metadata"]["tool_runtime"] = "r"
+            spec["metadata"]["dependencies"] = [
+                "R",
+                "Seurat>=4.0",
+                "Matrix<=1.6",
+                "dplyr==1.1.0"
+            ]
+            r_spec = Path(tmp_dir) / "r-versioned-contract.json"
+            r_spec.write_text(json.dumps(spec, ensure_ascii=False, indent=2), encoding="utf-8")
+
+            completed = self.run_node("--spec-file", str(r_spec), "--out-root", tmp_dir)
+            self.assertEqual(completed.returncode, 0, msg=completed.stderr)
+            target = Path(completed.stdout.strip())
+            wrapper = target / "sc_tenifold_knk.py"
+            demo_input = target / "examples" / "demo_input" / "input_manifest.json"
+
+            with tempfile.TemporaryDirectory() as bin_dir, tempfile.TemporaryDirectory() as out_dir:
+                rscript = Path(bin_dir) / ("Rscript.bat" if os.name == "nt" else "Rscript")
+                if os.name == "nt":
+                    rscript.write_text(
+                        "@echo off\r\n"
+                        "echo %PAPER2OMICS_R_PACKAGE_NAME%>>%PAPER2OMICS_R_PROBE_LOG%\r\n"
+                        "exit /b 1\r\n",
+                        encoding="utf-8"
+                    )
+                else:
+                    rscript.write_text(
+                        "#!/bin/sh\n"
+                        "printf '%s\\n' \"$PAPER2OMICS_R_PACKAGE_NAME\" >> \"$PAPER2OMICS_R_PROBE_LOG\"\n"
+                        "exit 1\n",
+                        encoding="utf-8"
+                    )
+                    rscript.chmod(0o755)
+
+                probe_log = Path(out_dir) / "r-probes.txt"
+                env = os.environ.copy()
+                env["PATH"] = str(bin_dir) + os.pathsep + env.get("PATH", "")
+                env["PAPER2OMICS_R_PROBE_LOG"] = str(probe_log)
+                plan = subprocess.run(
+                    [
+                        sys.executable,
+                        str(wrapper),
+                        "plan",
+                        "--input",
+                        str(demo_input),
+                        "--out",
+                        out_dir
+                    ],
+                    cwd=target,
+                    capture_output=True,
+                    text=True,
+                    env=env
+                )
+                self.assertEqual(plan.returncode, 0, msg=plan.stderr)
+                payload = json.loads(plan.stdout)
+                packages = payload["preflight"]["package_probe"]["packages"]
+                by_name = {item["name"]: item for item in packages}
+                self.assertEqual(by_name["Seurat>=4.0"]["package_name"], "Seurat")
+                self.assertEqual(by_name["Matrix<=1.6"]["package_name"], "Matrix")
+                self.assertEqual(by_name["dplyr==1.1.0"]["package_name"], "dplyr")
+                self.assertIn("Seurat>=4.0", payload["preflight"]["missing_dependencies"])
+                self.assertIn("Matrix<=1.6", payload["preflight"]["missing_dependencies"])
+                self.assertIn("dplyr==1.1.0", payload["preflight"]["missing_dependencies"])
+                self.assertEqual(
+                    probe_log.read_text(encoding="utf-8").splitlines(),
+                    ["Seurat", "Matrix", "dplyr"]
+                )
 
     def test_cli_schema_and_diff_commands(self):
         with tempfile.TemporaryDirectory() as tmp_dir:

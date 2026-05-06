@@ -449,7 +449,7 @@ function inferPackageType(dependencyEntries, languages) {
 function extractHintLines(entries, patterns) {
   const lines = [];
   for (const entry of entries) {
-    for (const line of String(entry.preview || "").split(/\r?\n/)) {
+    for (const line of normalizeHintText(entry.preview).split(/\r?\n/)) {
       const trimmed = line.trim();
       if (!trimmed || trimmed.length > 240) {
         continue;
@@ -460,6 +460,71 @@ function extractHintLines(entries, patterns) {
     }
   }
   return [...new Set(lines)].slice(0, 12);
+}
+
+function normalizeHintText(value) {
+  return String(value || "").replace(/\\n/g, "\n");
+}
+
+function installHintPriority(filePath) {
+  const normalized = String(filePath || "").toLowerCase();
+  if (isDependencyFile(filePath)) {
+    return "dependency_file";
+  }
+  if (/(^|\/)(docs?|documentation|tutorials?|vignettes?|notebooks?)(\/|$)/.test(normalized)) {
+    return "official_docs_tutorial";
+  }
+  if (/(^|\/)(examples?|demos?)(\/|$)|(^|\/)inst\/manuscript(\/|$)/.test(normalized)) {
+    return "running_example_notebook_demo_script";
+  }
+  if (isReadmeFile(filePath)) {
+    return "readme";
+  }
+  return "other";
+}
+
+function priorityRank(priority) {
+  return {
+    official_docs_tutorial: 0,
+    running_example_notebook_demo_script: 1,
+    dependency_file: 2,
+    readme: 3,
+    other: 4
+  }[priority] ?? 4;
+}
+
+function extractStructuredHintLines(entries, patterns) {
+  const hints = [];
+  const seen = new Set();
+  for (const entry of entries) {
+    const sourcePriority = installHintPriority(entry.path);
+    for (const line of normalizeHintText(entry.preview).split(/\r?\n/)) {
+      const trimmed = line.trim().replace(/^["'`\]\[{},:]+|["'`\]\[{},:]+$/g, "");
+      if (!trimmed || trimmed.length > 240) {
+        continue;
+      }
+      if (!patterns.some((pattern) => pattern.test(trimmed))) {
+        continue;
+      }
+      const key = `${entry.path}\0${trimmed}`;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      hints.push({
+        source_path: entry.path,
+        source_priority: sourcePriority,
+        command_or_line: trimmed
+      });
+    }
+  }
+  return hints
+    .sort((left, right) => (
+      priorityRank(left.source_priority) - priorityRank(right.source_priority)
+      || left.source_path.localeCompare(right.source_path)
+      || left.command_or_line.localeCompare(right.command_or_line)
+    ))
+    .slice(0, 12);
 }
 
 function unique(values, limit = 40) {
@@ -698,14 +763,18 @@ async function main() {
   const languages = inferLanguages(blobs);
   const packageType = inferPackageType(dependencyEntries, languages);
   const hintSources = [...readme, ...dependencies, ...examples, ...docs];
-  const installHints = extractHintLines(hintSources, [
+  const hintPatterns = [
     /\binstall\b/i,
     /pip\s+install/i,
     /conda\s+(install|env|create)/i,
     /install\.packages/i,
     /devtools::install/i,
     /remotes::install/i
+  ];
+  const installHints = extractHintLines(hintSources, [
+    ...hintPatterns
   ]);
+  const structuredInstallHints = extractStructuredHintLines(hintSources, hintPatterns);
   const cliHints = extractHintLines(hintSources, [
     /\busage\b/i,
     /--help\b/i,
@@ -745,6 +814,7 @@ async function main() {
     },
     miningMetadata,
     installHints,
+    structuredInstallHints,
     cliHints,
     selections: {
       readme,

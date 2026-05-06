@@ -32,7 +32,20 @@ Do not use this skill when:
 
 ## Classification And Mining Rules
 
-- Represent perturbation workflows with four facets:
+- Classify algorithms with evidence-driven open snake_case labels. Do not force
+  a method into a closed set of known categories when tutorial, example, docs,
+  or abstract evidence supports a more specific task label.
+- Resolve the main classification from tutorial/application evidence first:
+  1. running example, notebook, or demo script
+  2. official docs/tutorial/vignette
+  3. paper abstract or official article summary
+  4. source code/API
+  5. README
+- Keep compatibility fields such as `primary_task`, `task_family`, and
+  `secondary_tasks`, but also emit `classification_basis`, `open_categories`,
+  `classification_notes`, confidence, source priority, traceable evidence, and
+  a paper2omics-owned domain/task hierarchy for open categories.
+- Represent perturbation workflows with four facets when supported:
   - `target_type`
   - `action`
   - `modeling_mechanism`

@@ -19,7 +19,28 @@ The child skill is generated as a contract bundle, not a prose-only method note.
 
 ## Current Classification Model
 
-Perturbation workflows are represented with structured facets:
+Algorithm classification is evidence-driven and uses open English snake_case
+labels. The generator should not force an algorithm into a closed set of known
+categories when tutorial, example, or abstract evidence supports a more precise
+label.
+
+Classification evidence is tutorial/application-first:
+
+1. running examples, notebooks, and demo scripts
+2. official docs, tutorials, and vignettes
+3. paper abstract or official article summary
+4. source code and API signatures
+5. README and package description
+
+Generated classification blocks keep compatibility fields such as
+`primary_task`, `task_family`, and `secondary_tasks`, and also include
+`classification_basis`, `open_categories`, `classification_notes`, confidence,
+source priority, and traceable evidence IDs. `open_categories` preserve the
+specific open task label and include a paper2omics-owned domain/task hierarchy
+for downstream routing.
+
+Perturbation workflows are represented with structured facets when supported by
+evidence:
 
 - `target_type`
 - `action`

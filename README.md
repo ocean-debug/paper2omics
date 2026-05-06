@@ -63,6 +63,64 @@ Workflow mining is example-first:
 Generated `evidence_report.md` records traceable evidence IDs for
 classifications, parameters, workflow steps, and DAG edges.
 
+## Invocation Preflight And Dependencies
+
+Generated child skills must report invocation requirements before analysis.
+The orchestrator `plan` and `run` commands emit a top-level `preflight` object
+covering:
+
+- required inputs
+- key parameters
+- key default values
+- runtime executable checks
+- Python, R, or CLI dependency checks
+- missing dependency names
+- install guidance that requires explicit user confirmation
+
+Dependency checks run in the active environment every time `plan` or `run` is
+called, so switching environments requires rerunning preflight. The generated
+wrapper does not install packages automatically.
+
+Package probing is runtime-aware:
+
+- Python runtime: probe Python packages with `importlib.util.find_spec`.
+- CLI runtime: probe command-line executables with `shutil.which`.
+- R runtime: probe R packages with `Rscript` and `requireNamespace`.
+
+Python dependency specs are parsed before import probing. Extras, version
+constraints, and environment markers are stripped for the import check while the
+original dependency string is preserved in reports. For example:
+
+- `scanpy[leiden]` probes `scanpy`
+- `celloracle[dev]` probes `celloracle`
+- `anndata>=0.10` probes `anndata`
+- `scvi-tools[tutorials]; python_version >= "3.10"` probes `scvi_tools`
+
+R dependency specs are also parsed before namespace probing. Version constraints
+are stripped for `requireNamespace`, while the original dependency string is
+preserved in reports. For example:
+
+- `Seurat>=4.0` probes `Seurat`
+- `Matrix<=1.6` probes `Matrix`
+- `dplyr==1.1.0` probes `dplyr`
+
+R package names are passed to `Rscript` through an environment variable rather
+than interpolated directly into R code.
+
+When dependencies are missing, installation guidance is sourced in this order:
+
+1. official tutorials, docs, and vignettes
+2. running examples, notebooks, and demos
+3. dependency files such as `requirements.txt`, `pyproject.toml`,
+   `environment.yml`, `DESCRIPTION`, `renv.lock`, `package.json`, and
+   `Dockerfile`
+4. README
+5. runtime-specific fallback guidance
+
+CLI tools do not fall back to `pip install` unless the official evidence says
+so. Missing CLI executables are reported with PATH/environment/conda/mamba style
+guidance.
+
 ## When To Use
 
 Use this skill when you have:
@@ -137,6 +195,9 @@ Every dry-run or run should produce a result directory containing:
 - `workflow/`
 - `reproducibility/`
 - `logs/`
+
+The `reproducibility/` directory includes `dependency_preflight.json`, which
+records the active-environment dependency check used for that `plan` or `run`.
 
 ## Local Commands
 
